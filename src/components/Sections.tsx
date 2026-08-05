@@ -1,5 +1,11 @@
 import { AnimatePresence, motion, useScroll, useTransform } from "framer-motion";
-import { useCallback, useMemo, useRef, useState } from "react";
+import {
+  useCallback,
+  useEffect,
+  useMemo,
+  useRef,
+  useState,
+} from "react";
 import { PORTFOLIO_IMAGES } from "../lib/content";
 import { useSite } from "../lib/site";
 import { cn } from "../utils/cn";
