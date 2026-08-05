@@ -95,7 +95,7 @@ export default function Navbar() {
               fetchPriority="high"
               decoding="async"
               draggable={false}
-              className="logo-adapt relative h-11 w-11 object-contain sm:h-[52px] sm:w-[52px]"
+              className="logo-adapt relative h-11 w-11 object-contain sm:h-[52px] sm:w-[120px]"
             />
           </a>
 
