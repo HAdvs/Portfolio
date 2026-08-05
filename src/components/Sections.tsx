@@ -92,10 +92,10 @@ export function About() {
                     style={{ borderColor: "color-mix(in srgb,var(--primary) 55%, transparent)" }}
                   />
                   <img
-                    src="https://i.ibb.co/WYnXtBW/HAITHAM.png"
+                     src="https://i.ibb.co/WYnXtBW/HAITHAM.png"
                     alt="YourMark"
-                    width={180}
-                    height={180}
+                    width={300}
+                    height={300}
                     loading="lazy"
                     decoding="async"
                     draggable={false}
