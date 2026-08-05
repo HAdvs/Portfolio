@@ -176,7 +176,6 @@ export default function Contact() {
                 <span className="relative">
                   {isAr ? "إرسال عبر البريد الإلكتروني" : "Send via Email"}
                   <span className="latin mx-1.5 opacity-70">·</span>
-                  <span className="latin" dir="ltr">{emailAddr}</span>
                 </span>
               </a>
 
