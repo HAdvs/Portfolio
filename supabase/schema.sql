@@ -310,8 +310,10 @@ begin
   foreach t in array array['projects','media_files','messages','testimonials','services',
     'categories','clients','faq_items','seo_configs','site_settings','content_blocks','activity_logs']
   loop
-    execute format('alter publication supabase_realtime add table public.%I', t);
-  exception when duplicate_object then null;
+    begin
+      execute format('alter publication supabase_realtime add table public.%I', t);
+    exception when duplicate_object then null;
+    end;
   end loop;
 end $$;
 
