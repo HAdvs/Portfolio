@@ -114,7 +114,7 @@ export default function SettingsV2() {
 
         {tab === "contact" && (
           <GlassCard padding="p-6" className="space-y-5">
-            <Input label="البريد الإلكتروني" type="email" value={form.email} onChange={(e) => set("email", e.target.value)} placeholder="hello@yourmark.studio" />
+            <Input label="البريد الإلكتروني" type="email" value={form.email} onChange={(e) => set("email", e.target.value)} placeholder="yourmark.brand@gmail.com" />
             <Input label="رقم الهاتف" value={form.phone} onChange={(e) => set("phone", e.target.value)} placeholder="+966 53 959 5432" />
             <Input label="واتساب (الرقم فقط)" value={form.whatsapp} onChange={(e) => set("whatsapp", e.target.value)} placeholder="966539595432" hint="بدون + أو مسافات — يُستخدم في رابط wa.me" />
             <div className="grid grid-cols-2 gap-4">

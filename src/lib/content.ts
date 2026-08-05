@@ -365,7 +365,7 @@ export const content: Record<Lang, Dict> = {
       note: "بالضغط على الزر سيتم فتح تطبيق البريد الإلكتروني برسالة معبأة تلقائياً بتفاصيل مشروعك.",
       info: [
         { t: "واتساب", v: "+966 53 959 5432" },
-        { t: "البريد", v: "hello@yourmark.studio" },
+        { t: "البريد", v: "yourmark.brand@gmail.com" },
         { t: "الموقع", v: "الرياض، المملكة العربية السعودية" },
         { t: "أوقات العمل", v: "الأحد – الخميس · ٩ص – ٦م" },
       ],
@@ -616,7 +616,7 @@ export const content: Record<Lang, Dict> = {
       note: "Clicking the button opens your email app with a message pre-filled with your project details.",
       info: [
         { t: "WhatsApp", v: "+966 53 959 5432" },
-        { t: "Email", v: "hello@yourmark.studio" },
+        { t: "Email", v: "yourmark.brand@gmail.com" },
         { t: "Location", v: "Riyadh, Saudi Arabia" },
         { t: "Hours", v: "Sun – Thu · 9am – 6pm" },
       ],

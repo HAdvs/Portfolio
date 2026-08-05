@@ -47,7 +47,7 @@ on conflict (id) do nothing;
 insert into public.site_settings (id, site_name, tagline_ar, tagline_en, logo_url, email, phone, whatsapp, location_ar, location_en)
 values ('site','YourMark','علامتك التجارية تستحق علامة فارقة.','Your brand deserves a mark that matters.',
   'https://i.ibb.co/84bLpr63/Portfolio-Haitham-Brand-Designer-Logo-2048x2048.png',
-  'hello@yourmark.studio','+966 53 959 5432','966539595432',
+  'yourmark.brand@gmail.com','+966 53 959 5432','966539595432',
   'الرياض، المملكة العربية السعودية','Riyadh, Saudi Arabia')
 on conflict (id) do nothing;
 
