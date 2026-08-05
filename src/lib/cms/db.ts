@@ -419,7 +419,18 @@ export const dbActivity = {
 };
 
 /* ── Media: Storage → media_files row → linkable id ───────────────── */
-const ALLOWED_EXT = new Set(["jpg", "jpeg", "png", "webp", "gif", "svg", "pdf", "mp4", "webm"]);
+const ALLOWED_EXT = new Set([
+  "jpg",
+  "jpeg",
+  "png",
+  "webp",
+  "gif",
+  "svg",
+  "pdf",
+  "mp4",
+  "webm",
+  "json",
+]);
 const MAX_UPLOAD_BYTES = 15 * 1024 * 1024; // 15 MB
 
 /** Validate before touching Storage — extension, size and declared type. */
