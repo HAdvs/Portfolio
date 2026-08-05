@@ -224,8 +224,14 @@ export function Work() {
   const [selectedProject, setSelectedProject] = useState<Project | null>(null);
   const closeModal = useCallback(() => setSelectedProject(null), []);
 
-  const storeProjects = useAdminStore((s) => s.projects);
+const storeProjects = useAdminStore((s) => s.projects);
 
+useEffect(() => {
+  console.log("=== CMS Projects ===");
+  console.log("Count:", storeProjects.length);
+  console.table(storeProjects);
+}, [storeProjects]);
+  
   // Filter visible projects only from store
   const visibleProjects = useMemo(() => {
     return (storeProjects || []).filter(
