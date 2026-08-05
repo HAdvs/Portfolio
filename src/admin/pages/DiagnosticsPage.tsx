@@ -2,7 +2,11 @@ import { motion } from "framer-motion";
 import { useState } from "react";
 import { createClient } from "@supabase/supabase-js";
 import {
-  supabase, isSupabaseConfigured, SUPABASE_URL, SUPABASE_ANON_KEY, STORAGE_BUCKET,
+  supabase,
+  isSupabaseConfigured,
+  SUPABASE_URL,
+  SUPABASE_ANON_KEY,
+  BACKUP_BUCKET,
 } from "../../lib/supabaseClient";
 import { useAuth } from "../lib/auth";
 import { PageHeader, Button, Badge, tk } from "../components/ui";
@@ -51,7 +55,7 @@ function buildChecks(): Check[] {
     ...Object.entries(OTHER_TABLE_COLUMNS).map(([t, cols]) => ({
       id: `cols-${t}`, group: "قاعدة البيانات — الأعمدة", label: `${t}: ${cols.length} أعمدة`, status: "pending" as Status,
     })),
-    { id: "st-bucket", group: "Storage", label: `حاوية "${STORAGE_BUCKET}" قابلة للكتابة`, status: "pending" },
+    { id: "st-bucket", group: "Storage", label: `حاوية "${BACKUP_BUCKET}" قابلة للكتابة`, status: "pending" },
     { id: "st-read", group: "Storage", label: "قراءة عامة من الحاوية (Public Read)", status: "pending" },
     { id: "st-del", group: "Storage", label: "حذف ملف الفحص", status: "pending" },
     { id: "rls-anon-read", group: "RLS", label: "مستخدم مجهول يقرأ المحتوى المنشور", status: "pending" },
@@ -126,23 +130,23 @@ export default function DiagnosticsPage() {
     }
 
     /* 5) Storage: upload → public read → delete */
-    const probePath = `diagnostics/probe-${Date.now()}.json`;
+    const probePath = `database/probe-${Date.now()}.json`;
     const probeFile = new File([JSON.stringify({ probe: true, at: new Date().toISOString() })], "probe.json", { type: "application/json" });
-    const { error: upErr } = await sb.storage.from(STORAGE_BUCKET).upload(probePath, probeFile, { upsert: true, contentType: "application/json" });
+    const { error: upErr } = await sb.storage.from(BACKUP_BUCKET).upload(probePath, probeFile, { upsert: true, contentType: "application/json" });
     if (upErr) {
       set("st-bucket", { status: "fail", detail: upErr.message });
       set("st-read", { status: "warn", detail: "تُخطي — فشل الرفع" });
       set("st-del", { status: "warn", detail: "تُخطي" });
     } else {
       set("st-bucket", { status: "pass", detail: probePath });
-      const { data: pub } = sb.storage.from(STORAGE_BUCKET).getPublicUrl(probePath);
+      const { data: pub } = sb.storage.from(BACKUP_BUCKET).getPublicUrl(probePath);
       try {
         const res = await fetch(pub.publicUrl, { cache: "no-store" });
         set("st-read", res.ok ? { status: "pass", detail: "القراءة العامة تعمل" } : { status: "fail", detail: `HTTP ${res.status} — سياسة القراءة العامة ناقصة` });
       } catch {
         set("st-read", { status: "fail", detail: "تعذّر الوصول العام للحاوية" });
       }
-      const { error: delErr } = await sb.storage.from(STORAGE_BUCKET).remove([probePath]);
+      const { error: delErr } = await sb.storage.from(BACKUP_BUCKET).remove([probePath]);
       set("st-del", delErr ? { status: "fail", detail: delErr.message } : { status: "pass" });
     }
 

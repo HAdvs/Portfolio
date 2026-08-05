@@ -1,4 +1,8 @@
-import { supabase, STORAGE_BUCKET } from "../supabaseClient";
+import {
+  supabase,
+  STORAGE_BUCKET,
+  BACKUP_BUCKET,
+} from "../supabaseClient";
 import type {
   ActivityLog, AdminUser, Category, Client, ContentBlock, FaqItem, MediaFile, Message,
   Project, SeoConfig, Service, SiteSettings, Testimonial, UserRole,
@@ -445,16 +449,21 @@ function validateUpload(file: File) {
 
 export const dbMedia = {
   /** 1) Validate. 2) Upload to Storage. 3) Return public URL + path. */
-  async upload(file: File, folder: string): Promise<{ url: string; path: string; size: number }> {
+  async upload(
+  file: File,
+  folder: string,
+  bucket: string = STORAGE_BUCKET
+): Promise<{ url: string; path: string; size: number }> {
+    
     validateUpload(file);
     const s = db();
     const ext = file.name.split(".").pop() ?? "bin";
     const path = `${folder}/${Date.now()}-${Math.random().toString(36).slice(2, 8)}.${ext}`;
-    const { error } = await s.storage.from(STORAGE_BUCKET).upload(path, file, {
+    const { error } = await s.storage.from(bucket).upload(path, file, {
       cacheControl: "31536000", upsert: false, contentType: file.type,
     });
     if (error) throw error;
-    const { data } = s.storage.from(STORAGE_BUCKET).getPublicUrl(path);
+    const { data } = s.storage.from(bucket).getPublicUrl(path);
     return { url: data.publicUrl, path, size: file.size };
   },
 
@@ -502,6 +511,10 @@ export const dbBackup = {
     const data = await fetchAll();
     const blob = new Blob([JSON.stringify({ label, exportedAt: new Date().toISOString(), data }, null, 2)], { type: "application/json" });
     const file = new File([blob], `backup-${Date.now()}.json`, { type: "application/json" });
-    return dbMedia.upload(file, "backups");
+    return dbMedia.upload(
+  file,
+  "database",
+  BACKUP_BUCKET
+);
   },
 };

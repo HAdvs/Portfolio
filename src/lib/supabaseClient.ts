@@ -32,3 +32,4 @@ export const supabase: SupabaseClient | null = isSupabaseConfigured
   : null;
 
 export const STORAGE_BUCKET = "media";
+export const BACKUP_BUCKET = "backups";
