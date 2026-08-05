@@ -36,7 +36,7 @@ export default function Contact() {
   const [sending, setSending] = useState(false);
 
   const isAr = lang === "ar";
-  const emailAddr = settings.email || t.contact.info[1]?.v || "yourmark.brand@gmail.com‬‏";
+  const emailAddr = settings.email || t.contact.info[1]?.v || "vvv";
 
   /* Contact details resolved live from CMS settings */
   const infoItems = t.contact.info.map((row, i) => {
