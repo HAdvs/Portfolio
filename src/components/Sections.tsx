@@ -94,8 +94,8 @@ export function About() {
                   <img
                      src="https://i.ibb.co/WYnXtBW/HAITHAM.png"
                     alt="YourMark"
-                    width={300}
-                    height={300}
+                    width={180}
+                    height={180}
                     loading="lazy"
                     decoding="async"
                     draggable={false}
