@@ -1,0 +1,493 @@
+@import "tailwindcss";
+
+@custom-variant dark (&:where(.dark, .dark *));
+
+@theme {
+  --font-sans: "IBM Plex Sans Arabic", "Inter", ui-sans-serif, system-ui, -apple-system,
+    "SF Pro Display", "Segoe UI", sans-serif;
+  --font-latin: "Inter", "SF Pro Display", ui-sans-serif, system-ui, sans-serif;
+
+  --color-brand-50: #eaf3ff;
+  --color-brand-100: #d3e7ff;
+  --color-brand-200: #a9ceff;
+  --color-brand-300: #74afff;
+  --color-brand-400: #3d8dff;
+  --color-brand-500: #0a84ff;
+  --color-brand-600: #0066e0;
+  --color-brand-700: #0050b4;
+  --color-brand-800: #093f8a;
+  --color-brand-900: #1e3a8a;
+  --color-ink: #050505;
+  --color-ink-soft: #18181b;
+}
+
+:root {
+  --primary: #0a84ff;
+  --primary-soft: #3d8dff;
+  --secondary: #1e3a8a;
+  --glass-w: rgba(255, 255, 255, 0.08);
+  --glass-d: rgba(255, 255, 255, 0.05);
+  --surface: #ffffff;
+  --page: #f6f8fb;
+  --txt: #0b1120;
+  --txt-muted: #5a6478;
+  --line: rgba(10, 20, 40, 0.09);
+  --card: rgba(255, 255, 255, 0.72);
+  --card-brd: rgba(255, 255, 255, 0.9);
+  --shadow: 0 30px 80px -40px rgba(9, 30, 66, 0.35);
+}
+
+.dark {
+  --surface: #18181b;
+  --page: #050505;
+  --txt: #f4f6fb;
+  --txt-muted: #98a2b8;
+  --line: rgba(255, 255, 255, 0.09);
+  --card: rgba(255, 255, 255, 0.05);
+  --card-brd: rgba(255, 255, 255, 0.09);
+  --shadow: 0 30px 90px -40px rgba(0, 0, 0, 0.9);
+}
+
+* {
+  -webkit-tap-highlight-color: transparent;
+}
+
+html {
+  scroll-behavior: smooth;
+  scroll-padding-top: 110px;
+}
+
+html[dir="rtl"] {
+  --pb-origin: right;
+}
+html[dir="ltr"] {
+  --pb-origin: left;
+}
+
+/* Custom animated cursor: hide native pointer on precise devices */
+@media (pointer: fine) and (min-width: 768px) {
+  html.has-cursor,
+  html.has-cursor a,
+  html.has-cursor button,
+  html.has-cursor div,
+  html.has-cursor span,
+  html.has-cursor img,
+  html.has-cursor section,
+  html.has-cursor h1,
+  html.has-cursor h2,
+  html.has-cursor h3,
+  html.has-cursor p {
+    cursor: none;
+  }
+}
+
+/* Select caret (works in both directions) */
+select {
+  background-image: url("data:image/svg+xml,%3Csvg xmlns='http://www.w3.org/2000/svg' viewBox='0 0 24 24' fill='none' stroke='%230a84ff' stroke-width='2' stroke-linecap='round' stroke-linejoin='round'%3E%3Cpath d='m6 9 6 6 6-6'/%3E%3C/svg%3E");
+  background-repeat: no-repeat;
+  background-size: 16px;
+  background-position: right 16px center;
+  padding-right: 42px !important;
+}
+html[dir="rtl"] select {
+  background-position: left 16px center;
+  padding-right: 16px !important;
+  padding-left: 42px !important;
+}
+select option {
+  background: var(--surface);
+  color: var(--txt);
+}
+
+input:focus,
+textarea:focus,
+select:focus {
+  border-color: color-mix(in srgb, var(--primary) 60%, transparent) !important;
+  box-shadow: 0 0 0 4px color-mix(in srgb, var(--primary) 12%, transparent);
+}
+
+/* ========= Admin panel styles (scoped to .admin-root) ========= */
+.admin-root {
+  font-family: "IBM Plex Sans Arabic", "Inter", ui-sans-serif, system-ui, sans-serif;
+  direction: rtl;
+}
+
+.admin-root .admin-label {
+  display: block;
+  margin-bottom: 8px;
+  font-size: 11px;
+  font-weight: 700;
+  text-transform: uppercase;
+  letter-spacing: 0.12em;
+  color: rgba(255, 255, 255, 0.38);
+}
+
+.admin-root input:focus,
+.admin-root textarea:focus,
+.admin-root select:focus {
+  border-color: rgba(10, 132, 255, 0.55) !important;
+  box-shadow: 0 0 0 3px rgba(10, 132, 255, 0.12) !important;
+}
+
+.admin-root input[type="color"] {
+  border: none;
+  padding: 0;
+}
+
+.admin-root ::-webkit-scrollbar {
+  width: 6px;
+  height: 6px;
+}
+.admin-root ::-webkit-scrollbar-track {
+  background: transparent;
+}
+.admin-root ::-webkit-scrollbar-thumb {
+  background: rgba(255, 255, 255, 0.1);
+  border-radius: 99px;
+}
+.admin-root ::-webkit-scrollbar-thumb:hover {
+  background: rgba(10, 132, 255, 0.4);
+}
+
+/* Admin always dark — never inherits light-mode vars */
+.admin-root,
+.admin-root * {
+  color-scheme: dark;
+}
+
+/* Admin select arrow */
+.admin-root select {
+  background-image: url("data:image/svg+xml,%3Csvg xmlns='http://www.w3.org/2000/svg' viewBox='0 0 24 24' fill='none' stroke='%230a84ff' stroke-width='2' stroke-linecap='round' stroke-linejoin='round'%3E%3Cpath d='m6 9 6 6 6-6'/%3E%3C/svg%3E") !important;
+  background-repeat: no-repeat;
+  background-position: left 14px center;
+  padding-left: 40px !important;
+  background-size: 15px;
+}
+.admin-root select option {
+  background: #0f0f14;
+  color: white;
+}
+
+/* Toggle switch */
+.admin-root .toggle-thumb {
+  transition: all 0.3s cubic-bezier(0.22, 1, 0.36, 1);
+}
+
+/* Noise for admin login */
+.admin-root .noise {
+  background-image: url("data:image/svg+xml,%3Csvg viewBox='0 0 240 240' xmlns='http://www.w3.org/2000/svg'%3E%3Cfilter id='n'%3E%3CfeTurbulence type='fractalNoise' baseFrequency='0.85' numOctaves='3'/%3E%3C/filter%3E%3Crect width='100%25' height='100%25' filter='url(%23n)' opacity='0.42'/%3E%3C/svg%3E");
+}
+
+body {
+  margin: 0;
+  background: var(--page);
+  color: var(--txt);
+  font-family: var(--font-sans);
+  overflow-x: hidden;
+  -webkit-font-smoothing: antialiased;
+  text-rendering: optimizeLegibility;
+  transition: background-color 0.6s ease, color 0.4s ease;
+}
+
+html[dir="ltr"] body {
+  font-family: var(--font-latin);
+}
+
+::selection {
+  background: var(--primary);
+  color: #fff;
+}
+
+/* ---------- Scrollbar ---------- */
+::-webkit-scrollbar {
+  width: 9px;
+  height: 9px;
+}
+::-webkit-scrollbar-track {
+  background: transparent;
+}
+::-webkit-scrollbar-thumb {
+  background: color-mix(in srgb, var(--primary) 45%, transparent);
+  border-radius: 99px;
+}
+::-webkit-scrollbar-thumb:hover {
+  background: var(--primary);
+}
+
+/* ---------- Utility layers ---------- */
+@layer utilities {
+  .glass {
+    background: var(--card);
+    border: 1px solid var(--card-brd);
+    backdrop-filter: blur(28px) saturate(180%);
+    -webkit-backdrop-filter: blur(28px) saturate(180%);
+  }
+  .glass-strong {
+    background: color-mix(in srgb, var(--surface) 78%, transparent);
+    border: 1px solid var(--line);
+    backdrop-filter: blur(34px) saturate(190%);
+    -webkit-backdrop-filter: blur(34px) saturate(190%);
+  }
+  .txt-muted {
+    color: var(--txt-muted);
+  }
+  .brand-grad {
+    background-image: linear-gradient(115deg, var(--primary), #6ab8ff 45%, var(--secondary));
+    -webkit-background-clip: text;
+    background-clip: text;
+    color: transparent;
+  }
+  .ring-line {
+    border: 1px solid var(--line);
+  }
+  .shadow-lux {
+    box-shadow: var(--shadow);
+  }
+  .latin {
+    font-family: var(--font-latin);
+  }
+  .no-scrollbar::-webkit-scrollbar {
+    display: none;
+  }
+  .no-scrollbar {
+    -ms-overflow-style: none;
+    scrollbar-width: none;
+  }
+}
+
+/* ---------- Animations ---------- */
+@keyframes floaty {
+  0%,
+  100% {
+    transform: translate3d(0, 0, 0) rotate(0deg);
+  }
+  50% {
+    transform: translate3d(0, -22px, 0) rotate(1.2deg);
+  }
+}
+@keyframes drift {
+  0% {
+    transform: translate3d(0, 0, 0) scale(1);
+  }
+  33% {
+    transform: translate3d(6%, -8%, 0) scale(1.12);
+  }
+  66% {
+    transform: translate3d(-7%, 6%, 0) scale(0.94);
+  }
+  100% {
+    transform: translate3d(0, 0, 0) scale(1);
+  }
+}
+@keyframes spinSlow {
+  to {
+    transform: rotate(360deg);
+  }
+}
+@keyframes shimmer {
+  0% {
+    background-position: 200% 0;
+  }
+  100% {
+    background-position: -200% 0;
+  }
+}
+@keyframes pulseGlow {
+  0%,
+  100% {
+    opacity: 0.45;
+    transform: scale(1);
+  }
+  50% {
+    opacity: 0.85;
+    transform: scale(1.06);
+  }
+}
+@keyframes rise {
+  from {
+    opacity: 0;
+    transform: translateY(26px);
+  }
+  to {
+    opacity: 1;
+    transform: none;
+  }
+}
+@keyframes marquee {
+  from {
+    transform: translateX(0);
+  }
+  to {
+    transform: translateX(-50%);
+  }
+}
+
+.anim-float {
+  animation: floaty 7s ease-in-out infinite;
+}
+.anim-drift {
+  animation: drift 26s ease-in-out infinite;
+}
+.anim-spin-slow {
+  animation: spinSlow 34s linear infinite;
+}
+.anim-glow {
+  animation: pulseGlow 6s ease-in-out infinite;
+}
+.anim-rise {
+  animation: rise 0.9s cubic-bezier(0.22, 1, 0.36, 1) both;
+}
+.anim-marquee {
+  animation: marquee 38s linear infinite;
+}
+
+.shimmer-text {
+  background: linear-gradient(
+    90deg,
+    var(--txt) 0%,
+    var(--primary) 25%,
+    var(--txt) 50%,
+    var(--primary) 75%,
+    var(--txt) 100%
+  );
+  background-size: 200% auto;
+  -webkit-background-clip: text;
+  background-clip: text;
+  color: transparent;
+  animation: shimmer 6s linear infinite;
+}
+
+.grid-lines {
+  background-image: linear-gradient(var(--line) 1px, transparent 1px),
+    linear-gradient(90deg, var(--line) 1px, transparent 1px);
+  background-size: 72px 72px;
+  mask-image: radial-gradient(ellipse 80% 60% at 50% 40%, #000 20%, transparent 78%);
+  -webkit-mask-image: radial-gradient(ellipse 80% 60% at 50% 40%, #000 20%, transparent 78%);
+}
+
+.noise {
+  background-image: url("data:image/svg+xml,%3Csvg viewBox='0 0 240 240' xmlns='http://www.w3.org/2000/svg'%3E%3Cfilter id='n'%3E%3CfeTurbulence type='fractalNoise' baseFrequency='0.85' numOctaves='3'/%3E%3C/filter%3E%3Crect width='100%25' height='100%25' filter='url(%23n)' opacity='0.42'/%3E%3C/svg%3E");
+}
+
+.tilt-card {
+  transform-style: preserve-3d;
+  transition: transform 0.5s cubic-bezier(0.22, 1, 0.36, 1), box-shadow 0.5s ease,
+    border-color 0.4s ease;
+}
+
+.logo-3d {
+  filter: drop-shadow(0 34px 60px color-mix(in srgb, var(--primary) 38%, transparent))
+    drop-shadow(0 8px 18px rgba(0, 0, 0, 0.18));
+}
+.dark .logo-3d {
+  filter: drop-shadow(0 34px 70px color-mix(in srgb, var(--primary) 55%, transparent))
+    drop-shadow(0 4px 22px rgba(0, 0, 0, 0.65));
+}
+
+/* Logo adapts to theme: keep original artwork, just optimize contrast */
+.logo-adapt {
+  transition: filter 0.5s ease;
+}
+.dark .logo-adapt {
+  filter: brightness(1.12) contrast(1.04)
+    drop-shadow(0 0 26px color-mix(in srgb, var(--primary) 30%, transparent));
+}
+
+/* combined: keep the 3D lighting while adapting to theme */
+.logo-3d.logo-adapt {
+  filter: drop-shadow(0 34px 60px color-mix(in srgb, var(--primary) 38%, transparent))
+    drop-shadow(0 8px 18px rgba(0, 0, 0, 0.18));
+}
+.dark .logo-3d.logo-adapt {
+  filter: brightness(1.1) contrast(1.03)
+    drop-shadow(0 34px 70px color-mix(in srgb, var(--primary) 52%, transparent))
+    drop-shadow(0 4px 22px rgba(0, 0, 0, 0.6));
+}
+
+@media (prefers-reduced-motion: reduce) {
+  *,
+  *::before,
+  *::after {
+    animation-duration: 0.001ms !important;
+    animation-iteration-count: 1 !important;
+    transition-duration: 0.001ms !important;
+    scroll-behavior: auto !important;
+  }
+}
+
+/* ════════════════════════════════════════════════════════════════════
+   ADMIN DASHBOARD — Apple Liquid Glass theming
+   Light is the business default; dark is opt-in; both share one token
+   set consumed through `tk` in admin/components/ui.
+   ════════════════════════════════════════════════════════════════════ */
+.admin-root {
+  /* ── Light (default) ── */
+  --adm-page: #eef1f6;
+  --adm-bg: rgba(255, 255, 255, 0.04);
+  --adm-bg-hover: rgba(15, 23, 42, 0.05);
+  --adm-border: rgba(15, 23, 42, 0.09);
+  --adm-border-focus: rgba(10, 132, 255, 0.55);
+  --adm-glass: rgba(255, 255, 255, 0.66);
+  --adm-glass-strong: rgba(255, 255, 255, 0.84);
+  --adm-text: rgba(13, 18, 32, 0.92);
+  --adm-muted: rgba(13, 18, 32, 0.55);
+  --adm-faint: rgba(13, 18, 32, 0.34);
+  --adm-card-shadow: 0 10px 34px rgba(15, 30, 66, 0.1),
+    inset 0 1px 0 rgba(255, 255, 255, 0.9);
+  --adm-sidebar: rgba(255, 255, 255, 0.72);
+  --adm-topbar: rgba(255, 255, 255, 0.78);
+  --adm-pop: rgba(255, 255, 255, 0.92);
+  --adm-pop-shadow: 0 24px 60px rgba(15, 30, 66, 0.18);
+  --adm-active-bg: linear-gradient(
+    135deg,
+    rgba(10, 132, 255, 0.14),
+    rgba(30, 58, 138, 0.1)
+  );
+  --adm-hover-bg: rgba(15, 23, 42, 0.045);
+  color: var(--adm-text);
+  background: var(--adm-page);
+}
+
+.admin-root[data-admin-theme="dark"] {
+  --adm-page: #060609;
+  --adm-bg: rgba(255, 255, 255, 0.04);
+  --adm-bg-hover: rgba(255, 255, 255, 0.07);
+  --adm-border: rgba(255, 255, 255, 0.08);
+  --adm-border-focus: rgba(10, 132, 255, 0.55);
+  --adm-glass: rgba(255, 255, 255, 0.06);
+  --adm-glass-strong: rgba(255, 255, 255, 0.09);
+  --adm-text: rgba(255, 255, 255, 0.88);
+  --adm-muted: rgba(255, 255, 255, 0.42);
+  --adm-faint: rgba(255, 255, 255, 0.18);
+  --adm-card-shadow: 0 8px 32px rgba(0, 0, 0, 0.28),
+    inset 0 1px 0 rgba(255, 255, 255, 0.06);
+  --adm-sidebar: rgba(6, 6, 10, 0.98);
+  --adm-topbar: rgba(6, 6, 10, 0.96);
+  --adm-pop: #0d0d12;
+  --adm-pop-shadow: 0 24px 60px rgba(0, 0, 0, 0.7);
+  --adm-active-bg: linear-gradient(
+    135deg,
+    rgba(10, 132, 255, 0.2),
+    rgba(30, 58, 138, 0.15)
+  );
+  --adm-hover-bg: rgba(255, 255, 255, 0.05);
+}
+
+.admin-root {
+  color-scheme: light;
+  transition: background 0.4s ease;
+}
+.admin-root[data-admin-theme="dark"] {
+  color-scheme: dark;
+}
+
+/* Light-mode legibility: paragraph text that was hard-coded white for the
+   dark glass design must follow the theme when rendered on light cards.
+   (Colored chips/badges use span/div with explicit backgrounds and are
+   intentionally excluded.) */
+.admin-root[data-admin-theme="light"] p.text-white {
+  color: var(--adm-text);
+}
+.admin-root[data-admin-theme="light"] .chart-card text {
+  fill: var(--adm-muted);
+}
