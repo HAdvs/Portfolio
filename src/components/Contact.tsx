@@ -36,7 +36,7 @@ export default function Contact() {
   const [sending, setSending] = useState(false);
 
   const isAr = lang === "ar";
-  const emailAddr = settings.email || t.contact.info[1]?.v || "yourmark.brand@gmail.com‬‏‬‏";
+  const emailAddr = settings.email || t.contact.info[1]?.v || "hello@yourmark.studio";
 
   /* Contact details resolved live from CMS settings */
   const infoItems = t.contact.info.map((row, i) => {
@@ -175,7 +175,8 @@ export default function Contact() {
                 </svg>
                 <span className="relative">
                   {isAr ? "إرسال عبر البريد الإلكتروني" : "Send via Email"}
-                 
+                  <span className="latin mx-1.5 opacity-70">·</span>
+                  <span className="latin" dir="ltr">{emailAddr}</span>
                 </span>
               </a>
 
