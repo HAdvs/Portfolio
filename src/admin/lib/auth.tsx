@@ -154,76 +154,18 @@ export function useAdminGate(): { loading: boolean; allowed: boolean; reason: Ga
     if (!supabase) { setState({ loading: false, allowed: true, reason: "" }); return; }
     if (!isAuthenticated || !user) { setState({ loading: false, allowed: false, reason: "not-authed" }); return; }
     let cancelled = false;
-
-    /* ── Authoritative fast path: the role claim signed into the JWT ──
-       The bootstrap admin is created with user_metadata.role = super_admin.
-       JWT claims are signed by Supabase — trustworthy without any DB read,
-       immune to RLS filtering, schema drift and PostgREST cache issues.
-       This is what finally ends the false "no profile" lockout. */
-    const STAFF_ROLES = new Set(["super_admin", "admin", "editor", "moderator"]);
-    const claimedRole =
-      (user.user_metadata?.role as string | undefined) ??
-      (user.app_metadata?.role as string | undefined);
-    if (claimedRole && STAFF_ROLES.has(claimedRole)) {
-      setState({ loading: false, allowed: true, reason: "" });
-      return;
-    }
-
-    type Row = { role?: string; is_active?: boolean } | null;
-
-    /* Three-layer read so a valid user can NEVER be misread as missing:
-       1) SECURITY DEFINER RPC — bypasses RLS entirely (immune to policy
-          drift; a mis-filtered RLS select returns null WITHOUT error,
-          which is exactly what caused the false "no profile" screen).
-       2) Direct select("*") — never fails on missing/renamed columns. */
-    const readViaRpc = async (): Promise<Row> => {
-      const { data, error } = await supabase!.rpc("get_my_profile");
-      if (error) return null; // function absent on older DBs → fall through
-      return (data as Row) ?? null;
-    };
-    const readDirect = async (): Promise<Row> => {
-      const { data, error } = await supabase!.from("profiles").select("*").eq("id", user.id).maybeSingle();
-      if (error) console.warn("[admin-gate] profile read failed:", error.message);
-      return (data as Row) ?? null;
-    };
-    const readProfile = async (): Promise<Row> => (await readViaRpc()) ?? (await readDirect());
-
-    const sleep = (ms: number) => new Promise((r) => setTimeout(r, ms));
-
-    (async () => {
-      let profile = await readProfile();
-
-      /* Transient (session still hydrating, PostgREST cache) → retry once. */
-      if (!profile) {
-        await sleep(700);
-        profile = await readProfile();
-      }
-
-      /* Row genuinely missing but the user exists in auth.users →
-         auto-provision it (super_admin for the bootstrap mailbox). */
-      if (!profile) {
-        const role = user.email?.toLowerCase() === ADMIN_EMAIL ? "super_admin" : "viewer";
-        await supabase!
-          .from("profiles")
-          .insert({
-            id: user.id,
-            email: user.email ?? "",
-            username: user.email?.split("@")[0] ?? "",
-            name: (user.user_metadata?.name as string) ?? "",
-            role,
-          })
-          .then(() => undefined);
-        profile = await readProfile();
-      }
-
-      if (cancelled) return;
-      if (!profile) setState({ loading: false, allowed: false, reason: "no-profile" });
-      /* Tolerant: a missing is_active column means "active", not "blocked". */
-      else if (profile.is_active === false) setState({ loading: false, allowed: false, reason: "inactive" });
-      else if (profile.role === "viewer") setState({ loading: false, allowed: false, reason: "viewer" });
-      else setState({ loading: false, allowed: true, reason: "" });
-    })();
-
+    supabase
+      .from("profiles")
+      .select("role,is_active")
+      .eq("id", user.id)
+      .maybeSingle()
+      .then(({ data, error }) => {
+        if (cancelled) return;
+        if (error || !data) setState({ loading: false, allowed: false, reason: "no-profile" });
+        else if (!data.is_active) setState({ loading: false, allowed: false, reason: "inactive" });
+        else if (data.role === "viewer") setState({ loading: false, allowed: false, reason: "viewer" });
+        else setState({ loading: false, allowed: true, reason: "" });
+      });
     return () => { cancelled = true; };
   }, [isAuthenticated, user]);
 

@@ -260,7 +260,6 @@ drop policy if exists "staff all seo"          on public.seo_configs;
 drop policy if exists "staff all settings"     on public.site_settings;
 drop policy if exists "staff all blocks"       on public.content_blocks;
 drop policy if exists "staff all profiles"     on public.profiles;
-drop policy if exists "self insert profile"    on public.profiles;
 drop policy if exists "self update profile"    on public.profiles;
 drop policy if exists "staff ins activity"     on public.activity_logs;
 drop policy if exists "staff read activity"    on public.activity_logs;
@@ -278,20 +277,7 @@ create policy "staff all seo"          on public.seo_configs   for all using (pu
 create policy "staff all settings"     on public.site_settings for all using (public.is_staff()) with check (public.is_staff());
 create policy "staff all blocks"       on public.content_blocks for all using (public.is_staff()) with check (public.is_staff());
 create policy "staff all profiles"     on public.profiles      for all using (public.is_staff()) with check (public.is_staff());
-create policy "self select profile"    on public.profiles      for select using (id = auth.uid());
-create policy "self insert profile"    on public.profiles      for insert with check (id = auth.uid());
 create policy "self update profile"    on public.profiles      for update using (id = auth.uid());
-
--- SECURITY DEFINER: read own profile immune to any RLS drift. Prevents the
--- app from ever mistaking an existing profile for "no profile".
-create or replace function public.get_my_profile()
-returns jsonb language sql stable security definer set search_path = public as $$
-  select coalesce(
-    (select jsonb_build_object('role', role, 'is_active', is_active)
-       from public.profiles where id = auth.uid()),
-    null);
-$$;
-grant execute on function public.get_my_profile() to authenticated, anon, service_role;
 create policy "staff ins activity"     on public.activity_logs for insert with check (public.is_staff() or auth.uid() is not null);
 create policy "staff read activity"    on public.activity_logs for select using (public.is_staff());
 

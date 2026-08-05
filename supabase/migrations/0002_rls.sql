@@ -57,7 +57,6 @@ drop policy if exists "staff all seo"          on public.seo_configs;
 drop policy if exists "staff all settings"     on public.site_settings;
 drop policy if exists "staff all blocks"       on public.content_blocks;
 drop policy if exists "staff all profiles"     on public.profiles;
-drop policy if exists "self insert profile"    on public.profiles;
 drop policy if exists "self update profile"    on public.profiles;
 drop policy if exists "staff ins activity"     on public.activity_logs;
 drop policy if exists "staff read activity"    on public.activity_logs;
@@ -75,7 +74,6 @@ create policy "staff all seo"          on public.seo_configs   for all using (pu
 create policy "staff all settings"     on public.site_settings for all using (public.is_staff()) with check (public.is_staff());
 create policy "staff all blocks"       on public.content_blocks for all using (public.is_staff()) with check (public.is_staff());
 create policy "staff all profiles"     on public.profiles      for all using (public.is_staff()) with check (public.is_staff());
-create policy "self insert profile"    on public.profiles      for insert with check (id = auth.uid());
 create policy "self update profile"    on public.profiles      for update using (id = auth.uid());
 create policy "staff ins activity"     on public.activity_logs for insert with check (public.is_staff() or auth.uid() is not null);
 create policy "staff read activity"    on public.activity_logs for select using (public.is_staff());

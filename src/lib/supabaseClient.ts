@@ -11,17 +11,8 @@ import { createClient, type SupabaseClient } from "@supabase/supabase-js";
 
 const env = (import.meta as unknown as { env?: Record<string, string | undefined> }).env ?? {};
 
-/* Accept both Vite (VITE_*) and Next-style (NEXT_PUBLIC_*) naming so the
-   connection works regardless of how the variables were created on Vercel.
-   NOTE: the SERVICE_ROLE key must NEVER be referenced here — it is
-   server-only and would be a security leak in a client bundle. */
-export const SUPABASE_URL =
-  env.VITE_SUPABASE_URL ?? env.NEXT_PUBLIC_SUPABASE_URL ?? "";
-export const SUPABASE_ANON_KEY =
-  env.VITE_SUPABASE_ANON_KEY ??
-  env.NEXT_PUBLIC_SUPABASE_ANON_KEY ??
-  env.NEXT_PUBLIC_SUPABASE_PUBLISHABLE_KEY ??
-  "";
+export const SUPABASE_URL = env.VITE_SUPABASE_URL ?? "";
+export const SUPABASE_ANON_KEY = env.VITE_SUPABASE_ANON_KEY ?? "";
 
 export const isSupabaseConfigured: boolean =
   /^https:\/\/[a-z0-9.-]+\.supabase\.co$/i.test(SUPABASE_URL) &&
