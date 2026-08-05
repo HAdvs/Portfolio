@@ -145,15 +145,31 @@ export function useAuth() {
 export type GateReason = "" | "not-authed" | "no-profile" | "inactive" | "viewer";
 
 export function useAdminGate(): { loading: boolean; allowed: boolean; reason: GateReason } {
-  const { user, isAuthenticated } = useAuth();
+  const { user, isAuthenticated, loading: authLoading } = useAuth();
   const [state, setState] = useState<{ loading: boolean; allowed: boolean; reason: GateReason }>({
-    loading: true, allowed: false, reason: "not-authed",
+    loading: true,
+    allowed: false,
+    reason: "not-authed",
   });
 
   useEffect(() => {
-    if (!supabase) { setState({ loading: false, allowed: true, reason: "" }); return; }
-    if (!isAuthenticated || !user) { setState({ loading: false, allowed: false, reason: "not-authed" }); return; }
     let cancelled = false;
+
+    // 1) لا تقم بأي فحص قبل اكتمال مصادقة AuthProvider
+    if (authLoading) {
+      setState({ loading: true, allowed: false, reason: "not-authed" });
+      return;
+    }
+
+    // 2) إذا لا يوجد user => deny
+    if (!isAuthenticated || !user) {
+      setState({ loading: false, allowed: false, reason: "not-authed" });
+      return;
+    }
+
+    // 3) user جاهز: الآن نعتبرها عملية تحميل للـ gate
+    setState({ loading: true, allowed: false, reason: "" });
+
     supabase
       .from("profiles")
       .select("role,is_active")
@@ -161,13 +177,58 @@ export function useAdminGate(): { loading: boolean; allowed: boolean; reason: Ga
       .maybeSingle()
       .then(({ data, error }) => {
         if (cancelled) return;
-        if (error || !data) setState({ loading: false, allowed: false, reason: "no-profile" });
-        else if (!data.is_active) setState({ loading: false, allowed: false, reason: "inactive" });
-        else if (data.role === "viewer") setState({ loading: false, allowed: false, reason: "viewer" });
-        else setState({ loading: false, allowed: true, reason: "" });
+
+        // ✅ التعامل الصحيح مع الأخطاء
+        if (error) {
+          const code = (error as any)?.code;
+          const message = error.message?.toLowerCase?.() ?? "";
+
+          // ✅ فقط PGRST116 / No rows => no-profile
+          const isNoRow =
+            code === "PGRST116" ||
+            message.includes("no rows") ||
+            message.includes("0 rows");
+
+          if (isNoRow) {
+            setState({ loading: false, allowed: false, reason: "no-profile" });
+            return;
+          }
+
+          // ✅ أي خطأ آخر لا تعتبره "no-profile"
+          setState({ loading: false, allowed: false, reason: "not-authed" });
+          return;
+        }
+
+        // إذا data null بدون error => اعتبرها no-profile (هذه حالة "لا صف")
+        if (!data) {
+          setState({ loading: false, allowed: false, reason: "no-profile" });
+          return;
+        }
+
+        // 4) قواعد الدخول
+        if (!data.is_active) {
+          setState({ loading: false, allowed: false, reason: "inactive" });
+          return;
+        }
+
+        if (data.role === "viewer") {
+          setState({ loading: false, allowed: false, reason: "viewer" });
+          return;
+        }
+
+        // staff/super_admin/أي دور غير viewer
+        setState({ loading: false, allowed: true, reason: "" });
+      })
+      .catch(() => {
+        if (cancelled) return;
+        // ✅ لا تعتبر كـ no-profile في حالة استثناء غير متوقع
+        setState({ loading: false, allowed: false, reason: "not-authed" });
       });
-    return () => { cancelled = true; };
-  }, [isAuthenticated, user]);
+
+    return () => {
+      cancelled = true;
+    };
+  }, [authLoading, isAuthenticated, user]);
 
   return state;
 }
