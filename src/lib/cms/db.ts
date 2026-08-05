@@ -187,8 +187,12 @@ export async function fetchAll() {
   const [projects, media, messages, testimonials, services, categories, faq, seo, settings, users, activity, blocks, clients] =
     await Promise.all([
       s.from("projects")
-        .select("*, categories(slug), clients(name_ar, name_en)")
-        .order("order_index"),
+.select(`
+  *,
+  categories!projects_category_id_fkey(slug),
+  clients!projects_client_id_fkey(name_ar, name_en)
+`)
+      .order("order_index"),
       s.from("media_files").select("*").order("created_at", { ascending: false }),
       s.from("messages").select("*").order("created_at", { ascending: false }),
       s.from("testimonials").select("*").order("order_index"),
