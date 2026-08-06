@@ -547,10 +547,6 @@ export const dbClients = tableOps<Client>("clients", (x) => ({
 }));
 
 export const dbBackup = {
-  // ...
-};
-
-export const dbBackup = {
   async exportAll(
     label: string
   ): Promise<{ id: string; url: string; size: number }> {
