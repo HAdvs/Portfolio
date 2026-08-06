@@ -446,10 +446,20 @@ export const dbUsers = {
 
 export const dbActivity = {
   async insert(a: Omit<ActivityLog, "id" | "createdAt">) {
-    await db().from("activity_logs").insert({
-      user_id: a.userId, user_name: a.userName, action: a.action,
-      resource: a.resource, resource_id: a.resourceId, details: a.details,
-    }).then(({ error }) => { if (error) console.warn("[activity]", error.message); });
+    const { error } = await db().from("activity_logs").insert({
+      id: crypto.randomUUID(),
+
+      user_id: a.userId,
+      user_name: a.userName,
+      action: a.action,
+      resource: a.resource,
+      resource_id: a.resourceId,
+      details: a.details,
+
+      created_at: new Date().toISOString(),
+    });
+
+    if (error) throw error;
   },
 };
 
