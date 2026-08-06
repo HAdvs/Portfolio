@@ -188,7 +188,22 @@ async function resolveClientId(name: string | undefined): Promise<string | null>
 /* ── Fetch everything (single hydration pass) ─────────────────────── */
 export async function fetchAll() {
   const s = db();
-  const [projects, media, messages, testimonials, services, categories, faq, seo, settings, users, activity, blocks, clients] =
+  const [
+  projects,
+  media,
+  messages,
+  testimonials,
+  services,
+  categories,
+  faq,
+  seo,
+  settings,
+  users,
+  activity,
+  blocks,
+  clients,
+  backups,
+] =
     await Promise.all([
       s.from("projects")
 .select(`
@@ -209,26 +224,38 @@ export async function fetchAll() {
       s.from("activity_logs").select("*").order("created_at", { ascending: false }).limit(200),
       s.from("content_blocks").select("*"),
       s.from("clients").select("*").order("order_index"),
+      s.from("backup_files")
+  .select("*")
+  .order("created_at", { ascending: false }),
     ]);
 
   const fatal = [projects, media, messages, testimonials, services, categories, faq, seo].find((r) => r.error);
   if (fatal?.error) throw fatal.error;
 
   return {
-    projects: (projects.data ?? []).map(mapProject),
-    media: (media.data ?? []).map(mapMedia),
-    messages: (messages.data ?? []).map(mapMessage),
-    testimonials: (testimonials.data ?? []).map(mapTestimonial),
-    services: (services.data ?? []).map(mapService),
-    categories: (categories.data ?? []).map(mapCategory),
-    faq: (faq.data ?? []).map(mapFaq),
-    seo: (seo.data ?? []).map(mapSeo),
-    settings: settings.data ? mapSettings(settings.data) : null,
-    users: (users.data ?? []).map(mapUser),
-    activity: (activity.data ?? []).map(mapActivity),
-    blocks: (blocks.data ?? []).map(mapBlock),
-    clients: (clients.data ?? []).map(mapClient),
-  };
+  projects: (projects.data ?? []).map(mapProject),
+  media: (media.data ?? []).map(mapMedia),
+  messages: (messages.data ?? []).map(mapMessage),
+  testimonials: (testimonials.data ?? []).map(mapTestimonial),
+  services: (services.data ?? []).map(mapService),
+  categories: (categories.data ?? []).map(mapCategory),
+  faq: (faq.data ?? []).map(mapFaq),
+  seo: (seo.data ?? []).map(mapSeo),
+  settings: settings.data ? mapSettings(settings.data) : null,
+  users: (users.data ?? []).map(mapUser),
+  activity: (activity.data ?? []).map(mapActivity),
+  blocks: (blocks.data ?? []).map(mapBlock),
+  clients: (clients.data ?? []).map(mapClient),
+
+  backups: (backups.data ?? []).map((b) => ({
+    id: b.id,
+    label: b.label,
+    url: b.url,
+    size: b.size,
+    type: b.type,
+    createdAt: b.created_at,
+  })),
+};
 }
 
 /* ── Projects CRUD (FK-aware) ─────────────────────────────────────── */
@@ -496,25 +523,89 @@ export const dbBlocks = {
   async upsert(key: string, data_ar: Record<string, unknown>, data_en: Record<string, unknown>) {
     const { error } = await db()
       .from("content_blocks")
-      .upsert({ block_key: key, data_ar, data_en, updated_at: new Date().toISOString() }, { onConflict: "block_key" });
+      .upsert(
+        {
+          block_key: key,
+          data_ar,
+          data_en,
+          updated_at: new Date().toISOString(),
+        },
+        { onConflict: "block_key" }
+      );
+
     if (error) throw error;
   },
 };
 
 export const dbClients = tableOps<Client>("clients", (x) => ({
-  name_ar: x.name_ar, name_en: x.name_en, logo_url: x.logo_url,
-  website: x.website, order_index: x.order_index, visible: x.visible,
+  name_ar: x.name_ar,
+  name_en: x.name_en,
+  logo_url: x.logo_url,
+  website: x.website,
+  order_index: x.order_index,
+  visible: x.visible,
 }));
 
 export const dbBackup = {
-  async exportAll(label: string): Promise<{ url: string; size: number }> {
+  // ...
+};
+
+export const dbBackup = {
+  async exportAll(
+    label: string
+  ): Promise<{ id: string; url: string; size: number }> {
     const data = await fetchAll();
-    const blob = new Blob([JSON.stringify({ label, exportedAt: new Date().toISOString(), data }, null, 2)], { type: "application/json" });
-    const file = new File([blob], `backup-${Date.now()}.json`, { type: "application/json" });
-    return dbMedia.upload(
-  file,
-  "database",
-  BACKUP_BUCKET
-);
+
+    const blob = new Blob(
+      [
+        JSON.stringify(
+          {
+            label,
+            exportedAt: new Date().toISOString(),
+            data,
+          },
+          null,
+          2
+        ),
+      ],
+      {
+        type: "application/json",
+      }
+    );
+
+    const file = new File(
+      [blob],
+      `backup-${Date.now()}.json`,
+      {
+        type: "application/json",
+      }
+    );
+
+    // رفع الملف إلى Storage
+    const uploaded = await dbMedia.upload(
+      file,
+      "database",
+      BACKUP_BUCKET
+    );
+
+    // حفظ بيانات النسخة في قاعدة البيانات
+    const { data: row, error } = await db()
+      .from("backup_files")
+      .insert({
+        label,
+        url: uploaded.url,
+        size: uploaded.size,
+        type: "manual",
+      })
+      .select()
+      .single();
+
+    if (error) throw error;
+
+    return {
+      id: row.id,
+      url: uploaded.url,
+      size: uploaded.size,
+    };
   },
 };

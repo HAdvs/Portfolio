@@ -157,26 +157,48 @@ export const useAdminStore = create<AdminStore>()((set, get) => ({
   lastSync: null,
 
   // ── hydration / realtime ──────────────────────────────────────────
-  hydrate: (data) =>
-    set({
-      projects: data.projects, media: data.media, messages: data.messages,
-      testimonials: data.testimonials, services: data.services, categories: data.categories,
-      faq: data.faq, seo: data.seo, settings: data.settings ?? DEFAULT_SETTINGS,
-      users: data.users, activity: data.activity,
-      blocks: data.blocks ?? [], clients: data.clients ?? [],
-      dbStatus: "online", lastSync: now(),
-    }),
+hydrate: (data) =>
+  set({
+    projects: data.projects,
+    media: data.media,
+    messages: data.messages,
+    testimonials: data.testimonials,
+    services: data.services,
+    categories: data.categories,
+    faq: data.faq,
+    seo: data.seo,
+    settings: data.settings ?? DEFAULT_SETTINGS,
+
+    users: data.users,
+    activity: data.activity,
+
+    blocks: data.blocks ?? [],
+    clients: data.clients ?? [],
+    backups: data.backups ?? [],
+
+    dbStatus: "online",
+    lastSync: now(),
+  }),
   setDbStatus: (s) => set({ dbStatus: s }),
 
   applyRemote: (table, type, row) => {
     const id = (row.id ?? row.block_key) as string;
     const map: Record<string, keyof AdminStore> = {
-      projects: "projects", media_files: "media", messages: "messages",
-      testimonials: "testimonials", services: "services", categories: "categories",
-      faq_items: "faq", seo_configs: "seo", site_settings: "settings",
-      profiles: "users", activity_logs: "activity",
-      content_blocks: "blocks", clients: "clients",
-    };
+  projects: "projects",
+  media_files: "media",
+  messages: "messages",
+  testimonials: "testimonials",
+  services: "services",
+  categories: "categories",
+  faq_items: "faq",
+  seo_configs: "seo",
+  site_settings: "settings",
+  profiles: "users",
+  activity_logs: "activity",
+  content_blocks: "blocks",
+  clients: "clients",
+  backup_files: "backups",
+};
     const key = map[table];
     if (!key) return;
     set((s) => {
@@ -414,16 +436,39 @@ export const useAdminStore = create<AdminStore>()((set, get) => ({
     set((s) => ({ activity: [{ ...a, id: uid(), createdAt: now() }, ...s.activity].slice(0, 200) }));
     if (isSupabaseConfigured) dbActivity.insert(a).catch(() => undefined);
   },
-  createBackup: async (label) => {
-    if (!isSupabaseConfigured) { fail(get, "نسخ احتياطي", new Error("قاعدة البيانات غير مهيأة")); return; }
-    try {
-      const { url, size } = await dbBackup.exportAll(label);
-      set((s) => ({ backups: [{ id: uid(), label, size, type: "manual", createdAt: now(), url }, ...s.backups] }));
-      get().pushNotification({ type: "success", title: "تم إنشاء نسخة احتياطية", message: label });
-    } catch (e) {
-      fail(get, "نسخ احتياطي", e);
-    }
-  },
+ createBackup: async (label) => {
+  if (!isSupabaseConfigured) {
+    fail(get, "نسخ احتياطي", new Error("قاعدة البيانات غير مهيأة"));
+    return;
+  }
+
+  try {
+    const backup = await dbBackup.exportAll(label);
+
+    set((s) => ({
+      backups: [
+        {
+          id: backup.id,
+          label,
+          size: backup.size,
+          type: "manual",
+          createdAt: now(),
+          url: backup.url,
+        },
+        ...s.backups,
+      ],
+    }));
+
+    get().pushNotification({
+      type: "success",
+      title: "تم إنشاء نسخة احتياطية",
+      message: label,
+    });
+
+  } catch (e) {
+    fail(get, "نسخ احتياطي", e);
+  }
+},
   deleteBackup: (id) => set((s) => ({ backups: s.backups.filter((b) => b.id !== id) })),
   toggleSidebar: () => set((s) => ({ sidebarCollapsed: !s.sidebarCollapsed })),
   toggleAdminTheme: () => set((s) => ({ adminTheme: s.adminTheme === "dark" ? "light" : "dark" })),
