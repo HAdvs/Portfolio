@@ -107,6 +107,24 @@ const mapSeo = (r: Record<string, unknown>): SeoConfig => ({
   updatedAt: ts(r.updated_at),
 });
 
+function seoCore(seo: Partial<SeoConfig>) {
+  const row: Record<string, unknown> = {};
+  if (seo.id !== undefined) row.id = seo.id;
+  if (seo.page !== undefined) row.page = seo.page;
+  if (seo.title_ar !== undefined) row.title_ar = seo.title_ar;
+  if (seo.title_en !== undefined) row.title_en = seo.title_en;
+  if (seo.description_ar !== undefined) row.description_ar = seo.description_ar;
+  if (seo.description_en !== undefined) row.description_en = seo.description_en;
+  if (seo.keywords !== undefined) row.keywords = seo.keywords;
+  if (seo.og_title !== undefined) row.og_title = seo.og_title;
+  if (seo.og_description !== undefined) row.og_description = seo.og_description;
+  if (seo.og_image !== undefined) row.og_image = seo.og_image;
+  if (seo.twitter_card !== undefined) row.twitter_card = seo.twitter_card;
+  if (seo.canonical !== undefined) row.canonical = seo.canonical;
+  if (seo.robots !== undefined) row.robots = seo.robots;
+  return row;
+}
+
 const mapSettings = (r: Record<string, unknown>): SiteSettings => ({
   id: (r.id as string) ?? "site", site_name: (r.site_name as string) ?? "YourMark",
   tagline_ar: (r.tagline_ar as string) ?? "", tagline_en: (r.tagline_en as string) ?? "",
@@ -123,6 +141,39 @@ const mapSettings = (r: Record<string, unknown>): SiteSettings => ({
   maintenance_mode: !!r.maintenance_mode, default_lang: (r.default_lang as "ar" | "en") ?? "ar",
   timezone: (r.timezone as string) ?? "Asia/Riyadh", updatedAt: ts(r.updated_at),
 });
+
+function settingsCore(data: Partial<SiteSettings>) {
+  const row: Record<string, unknown> = {};
+  if (data.site_name !== undefined) row.site_name = data.site_name;
+  if (data.tagline_ar !== undefined) row.tagline_ar = data.tagline_ar;
+  if (data.tagline_en !== undefined) row.tagline_en = data.tagline_en;
+  if (data.logo_url !== undefined) row.logo_url = data.logo_url;
+  if (data.favicon_url !== undefined) row.favicon_url = data.favicon_url;
+  if (data.og_image !== undefined) row.og_image = data.og_image;
+  if (data.primary_color !== undefined) row.primary_color = data.primary_color;
+  if (data.secondary_color !== undefined) row.secondary_color = data.secondary_color;
+  if (data.accent_color !== undefined) row.accent_color = data.accent_color;
+  if (data.font_ar !== undefined) row.font_ar = data.font_ar;
+  if (data.font_en !== undefined) row.font_en = data.font_en;
+  if (data.email !== undefined) row.email = data.email;
+  if (data.phone !== undefined) row.phone = data.phone;
+  if (data.whatsapp !== undefined) row.whatsapp = data.whatsapp;
+  if (data.location_ar !== undefined) row.location_ar = data.location_ar;
+  if (data.location_en !== undefined) row.location_en = data.location_en;
+  if (data.social_instagram !== undefined) row.social_instagram = data.social_instagram;
+  if (data.social_behance !== undefined) row.social_behance = data.social_behance;
+  if (data.social_linkedin !== undefined) row.social_linkedin = data.social_linkedin;
+  if (data.social_x !== undefined) row.social_x = data.social_x;
+  if (data.social_youtube !== undefined) row.social_youtube = data.social_youtube;
+  if (data.social_dribbble !== undefined) row.social_dribbble = data.social_dribbble;
+  if (data.ga_id !== undefined) row.ga_id = data.ga_id;
+  if (data.gtm_id !== undefined) row.gtm_id = data.gtm_id;
+  if (data.hotjar_id !== undefined) row.hotjar_id = data.hotjar_id;
+  if (data.maintenance_mode !== undefined) row.maintenance_mode = data.maintenance_mode;
+  if (data.default_lang !== undefined) row.default_lang = data.default_lang;
+  if (data.timezone !== undefined) row.timezone = data.timezone;
+  return row;
+}
 
 const mapUser = (r: Record<string, unknown>): AdminUser => ({
   id: r.id as string, username: (r.username as string) ?? "", email: (r.email as string) ?? "",
@@ -412,10 +463,40 @@ export const dbMessages = {
 };
 
 export const dbSeo = {
-  async upsert(page: string, data: Partial<SeoConfig>) {
+  async get(page: string) {
+    const { data, error } = await db().from("seo_configs").select("*").eq("page", page).maybeSingle();
+    if (error) throw error;
+    return data ? mapSeo(data) : null;
+  },
+
+  async list() {
+    const { data, error } = await db().from("seo_configs").select("*");
+    if (error) throw error;
+    return (data ?? []).map(mapSeo);
+  },
+
+  async insert(seo: SeoConfig) {
+    const { error } = await db().from("seo_configs").insert({ ...seoCore(seo), updated_at: new Date().toISOString() });
+    if (error) throw error;
+  },
+
+  async update(page: string, seo: Partial<SeoConfig>) {
     const { error } = await db()
       .from("seo_configs")
-      .upsert({ page, ...data, updated_at: new Date().toISOString() }, { onConflict: "page" });
+      .update({ ...seoCore(seo), updated_at: new Date().toISOString() })
+      .eq("page", page);
+    if (error) throw error;
+  },
+
+  async upsert(page: string, seo: Partial<SeoConfig>) {
+    const { error } = await db()
+      .from("seo_configs")
+      .upsert({ page, ...seoCore(seo), updated_at: new Date().toISOString() }, { onConflict: "page" });
+    if (error) throw error;
+  },
+
+  async remove(page: string) {
+    const { error } = await db().from("seo_configs").delete().eq("page", page);
     if (error) throw error;
   },
 };
@@ -424,7 +505,7 @@ export const dbSettings = {
   async update(data: Partial<SiteSettings>) {
     const { error } = await db()
       .from("site_settings")
-      .upsert({ id: "site", ...data, updated_at: new Date().toISOString() }, { onConflict: "id" });
+      .upsert({ id: "site", ...settingsCore(data), updated_at: new Date().toISOString() }, { onConflict: "id" });
     if (error) throw error;
   },
 };
