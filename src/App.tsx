@@ -63,7 +63,15 @@ function MarqueeStrip() {
   const { t } = useSite();
   return <Marquee items={t.marquee} />;
 }
+function AnalyticsTracker() {
+  const location = useLocation();
 
+  useEffect(() => {
+    trackPageView(location.pathname);
+  }, [location.pathname]);
+
+  return null;
+}
 function Site() {
   const { lang } = useSite();
 
