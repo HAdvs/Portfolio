@@ -170,12 +170,20 @@ export function useAdminGate(): { loading: boolean; allowed: boolean; reason: Ga
     // 3) user جاهز: الآن نعتبرها عملية تحميل للـ gate
     setState({ loading: true, allowed: false, reason: "" });
 
-    supabase
-      .from("profiles")
-      .select("role,is_active")
-      .eq("id", user.id)
-      .maybeSingle()
-      .then(({ data, error }) => {
+    // 4) إذا لم يتم تهيئة supabase => رفض الدخول
+    if (!supabase) {
+      setState({ loading: false, allowed: false, reason: "not-authed" });
+      return;
+    }
+
+    (async () => {
+      try {
+        const { data, error } = await supabase
+          .from("profiles")
+          .select("role,is_active")
+          .eq("id", user.id)
+          .maybeSingle();
+
         if (cancelled) return;
 
         // ✅ التعامل الصحيح مع الأخطاء
@@ -218,12 +226,12 @@ export function useAdminGate(): { loading: boolean; allowed: boolean; reason: Ga
 
         // staff/super_admin/أي دور غير viewer
         setState({ loading: false, allowed: true, reason: "" });
-      })
-      .catch(() => {
+      } catch {
         if (cancelled) return;
         // ✅ لا تعتبر كـ no-profile في حالة استثناء غير متوقع
         setState({ loading: false, allowed: false, reason: "not-authed" });
-      });
+      }
+    })();
 
     return () => {
       cancelled = true;

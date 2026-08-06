@@ -74,127 +74,206 @@ export default function DiagnosticsPage() {
   const set = (id: string, patch: Partial<Check>) =>
     setChecks((prev) => prev.map((c) => (c.id === id ? { ...c, ...patch } : c)));
 
+  const finish = () => {
+    setRunning(false);
+    setChecks((prev) => {
+      const text = prev
+        .map((c) => `${c.status === "pass" ? "✅" : c.status === "fail" ? "❌" : c.status === "warn" ? "⚠️" : "⏳"} [${c.group}] ${c.label}${c.detail ? ` — ${c.detail}` : ""}`)
+        .join("\n");
+      setReport(text);
+      return prev.map((c) => (c.status === "running" ? { ...c, status: "warn", detail: "لم يكتمل" } : c));
+    });
+  };
+
   const run = async () => {
     setRunning(true);
     const fresh = buildChecks().map((c) => ({ ...c, status: "running" as Status }));
     setChecks(fresh);
 
-    /* 1) Config */
-    set("cfg", isSupabaseConfigured
-      ? { status: "pass", detail: SUPABASE_URL }
-      : { status: "fail", detail: "أضف VITE_SUPABASE_URL و VITE_SUPABASE_ANON_KEY ثم أعد النشر" });
-    if (!isSupabaseConfigured || !supabase) { finish(); return; }
-    const sb = supabase; // local const → stable TS narrowing inside callbacks
+    try {
+      /* 1) Config */
+      set("cfg", isSupabaseConfigured
+        ? { status: "pass", detail: SUPABASE_URL }
+        : { status: "fail", detail: "أضف VITE_SUPABASE_URL و VITE_SUPABASE_ANON_KEY ثم أعد النشر" });
+      if (!isSupabaseConfigured || !supabase) { return; }
+      const sb = supabase; // local const → stable TS narrowing inside callbacks
 
-    /* 2) Auth */
-    const { data: sess } = await sb.auth.getSession();
-    set("auth-session", sess.session
-      ? { status: "pass", detail: sess.session.user.email ?? "" }
-      : { status: "fail", detail: "سجّل الدخول أولًا" });
-
-    if (user) {
-      const { data: prof, error: pe } = await sb.from("profiles").select("role").eq("id", user.id).maybeSingle();
-      set("auth-role", !pe && prof
-        ? { status: prof.role === "viewer" ? "warn" : "pass", detail: `role: ${prof.role}` }
-        : { status: "warn", detail: pe?.message ?? "لا يوجد صف profile — أنشئ المستخدم عبر schema.sql" });
-    } else {
-      set("auth-role", { status: "warn", detail: "بدون جلسة" });
-    }
-
-    /* 3) Tables */
-    for (const t of TABLES) {
-      const { error } = await sb.from(t).select("id").limit(1);
-      const msg = error?.message ?? "";
-      set(`tbl-${t}`, msg.includes("does not exist")
-        ? { status: "fail", detail: "الجدول غير موجود — نفّذ schema.sql" }
-        : error ? { status: "warn", detail: msg } : { status: "pass" });
-    }
-
-    /* 4) Columns — request every canonical column of every table at once */
-    const { error: colErr } = await sb.from("projects").select(PROJECT_COLUMNS.join(",")).limit(1);
-    if (!colErr) {
-      set("cols", { status: "pass", detail: "كل الأعمدة موجودة" });
-    } else {
-      const m = /column "?([\w_]+)"?/i.exec(colErr.message);
-      set("cols", { status: "fail", detail: `عمود مفقود: ${m?.[1] ?? ""} — نفّذ schema.sql` });
-    }
-
-    for (const [t, cols] of Object.entries(OTHER_TABLE_COLUMNS)) {
-      const { error: e2 } = await sb.from(t).select(cols.join(",")).limit(1);
-      if (!e2) {
-        set(`cols-${t}`, { status: "pass" });
-      } else {
-        const m2 = /column "?([\w_]+)"?/i.exec(e2.message);
-        set(`cols-${t}`, { status: "fail", detail: `عمود مفقود: ${m2?.[1] ?? ""} — نفّذ schema.sql` });
-      }
-    }
-
-    /* 5) Storage: upload → public read → delete */
-    const probePath = `database/probe-${Date.now()}.json`;
-    const probeFile = new File([JSON.stringify({ probe: true, at: new Date().toISOString() })], "probe.json", { type: "application/json" });
-    const { error: upErr } = await sb.storage.from(BACKUP_BUCKET).upload(probePath, probeFile, { upsert: true, contentType: "application/json" });
-    if (upErr) {
-      set("st-bucket", { status: "fail", detail: upErr.message });
-      set("st-read", { status: "warn", detail: "تُخطي — فشل الرفع" });
-      set("st-del", { status: "warn", detail: "تُخطي" });
-    } else {
-      set("st-bucket", { status: "pass", detail: probePath });
-      const { data: pub } = sb.storage.from(BACKUP_BUCKET).getPublicUrl(probePath);
+      /* 2) Auth */
       try {
-        const res = await fetch(pub.publicUrl, { cache: "no-store" });
-        set("st-read", res.ok ? { status: "pass", detail: "القراءة العامة تعمل" } : { status: "fail", detail: `HTTP ${res.status} — سياسة القراءة العامة ناقصة` });
-      } catch {
-        set("st-read", { status: "fail", detail: "تعذّر الوصول العام للحاوية" });
+        const { data: sess } = await sb.auth.getSession();
+        set("auth-session", sess.session
+          ? { status: "pass", detail: sess.session.user.email ?? "" }
+          : { status: "fail", detail: "سجّل الدخول أولًا" });
+      } catch (e: any) {
+        set("auth-session", { status: "warn", detail: e?.message ?? String(e) });
       }
-      const { error: delErr } = await sb.storage.from(BACKUP_BUCKET).remove([probePath]);
-      set("st-del", delErr ? { status: "fail", detail: delErr.message } : { status: "pass" });
-    }
 
-    /* 6) RLS — anonymous client (no session) */
-    const anon = createClient(SUPABASE_URL, SUPABASE_ANON_KEY, {
-      auth: { persistSession: false, autoRefreshToken: false, detectSessionInUrl: false },
-    });
-    const { error: anonRead } = await anon.from("projects").select("id").limit(1);
-    set("rls-anon-read", !anonRead
-      ? { status: "pass", detail: "القراءة العامة للمحتوى المنشور مسموحة" }
-      : { status: "fail", detail: anonRead.message });
-
-    const { error: anonWrite } = await anon.from("projects").insert({ id: "rls-probe", title_ar: "x" });
-    set("rls-anon-write", anonWrite
-      ? { status: "pass", detail: "الكتابة المجهولة مرفوضة كما هو متوقع" }
-      : { status: "fail", detail: "خطر: مستخدم مجهول استطاع الكتابة! راجع سياسات RLS" });
-
-    const { error: adminWrite } = await sb.from("activity_logs").insert({
-      user_id: user?.id ?? "", user_name: "diagnostics", action: "فحص النظام", resource: "diagnostics", details: "RLS admin write probe",
-    });
-    set("rls-admin-write", !adminWrite ? { status: "pass" } : { status: "fail", detail: adminWrite.message });
-
-    /* 7) Realtime */
-    await new Promise<void>((resolve) => {
-      const ch = sb.channel(`diag-${Date.now()}`).on("postgres_changes", { event: "*", schema: "public" }, () => undefined);
-      ch.subscribe((status) => {
-        set("rt", status === "SUBSCRIBED"
-          ? { status: "pass", detail: "القناة مفتوحة — المزامنة اللحظية جاهزة" }
-          : status === "CHANNEL_ERROR" || status === "TIMED_OUT"
-            ? { status: "fail", detail: String(status) } : { status: "running" });
-        if (status === "SUBSCRIBED" || status === "CHANNEL_ERROR" || status === "TIMED_OUT") {
-          sb.removeChannel(ch);
-          resolve();
+      if (user) {
+        try {
+          const { data: prof, error: pe } = await sb.from("profiles").select("role").eq("id", user.id).maybeSingle();
+          set("auth-role", !pe && prof
+            ? { status: prof.role === "viewer" ? "warn" : "pass", detail: `role: ${prof.role}` }
+            : { status: "warn", detail: pe?.message ?? "لا يوجد صف profile — أنشئ المستخدم عبر schema.sql" });
+        } catch (e: any) {
+          set("auth-role", { status: "warn", detail: e?.message ?? String(e) });
         }
-      });
-      setTimeout(() => { sb.removeChannel(ch); resolve(); }, 6000);
-    });
+      } else {
+        set("auth-role", { status: "warn", detail: "بدون جلسة" });
+      }
 
-    finish();
-  };
+      /* 3) Tables */
+      for (const t of TABLES) {
+        try {
+          const selectColumn = t === "content_blocks" ? "block_key" : "id";
+          const { error } = await sb.from(t).select(selectColumn).limit(1);
+          const msg = error?.message ?? "";
+          set(
+            `tbl-${t}`,
+            msg.includes("does not exist")
+              ? { status: "fail", detail: "الجدول غير موجود — نفّذ schema.sql" }
+              : error
+                ? { status: "warn", detail: msg }
+                : { status: "pass" }
+          );
+        } catch (e: any) {
+          set(`tbl-${t}`, { status: "warn", detail: e?.message ?? String(e) });
+        }
+      }
 
-  const finish = () => {
-    setRunning(false);
-    setChecks((prev) => {
-      const text = prev.map((c) => `${c.status === "pass" ? "✅" : c.status === "fail" ? "❌" : c.status === "warn" ? "⚠️" : "⏳"} [${c.group}] ${c.label}${c.detail ? ` — ${c.detail}` : ""}`).join("\n");
-      setReport(text);
-      return prev.map((c) => (c.status === "running" ? { ...c, status: "warn", detail: "لم يكتمل" } : c));
-    });
+      /* 4) Columns */
+      try {
+        const { error: colErr } = await sb.from("projects").select(PROJECT_COLUMNS.join(",")).limit(1);
+        if (!colErr) {
+          set("cols", { status: "pass", detail: "كل الأعمدة موجودة" });
+        } else {
+          const m = /column "?([\w_]+)"?/i.exec(colErr.message);
+          set("cols", { status: "fail", detail: `عمود مفقود: ${m?.[1] ?? ""} — نفّذ schema.sql` });
+        }
+      } catch (e: any) {
+        set("cols", { status: "warn", detail: e?.message ?? String(e) });
+      }
+
+      for (const [t, cols] of Object.entries(OTHER_TABLE_COLUMNS)) {
+        try {
+          const { error: e2 } = await sb.from(t).select(cols.join(",")).limit(1);
+          if (!e2) set(`cols-${t}`, { status: "pass" });
+          else {
+            const m2 = /column "?([\w_]+)"?/i.exec(e2.message);
+            set(`cols-${t}`, { status: "fail", detail: `عمود مفقود: ${m2?.[1] ?? ""} — نفّذ schema.sql` });
+          }
+        } catch (e: any) {
+          set(`cols-${t}`, { status: "warn", detail: e?.message ?? String(e) });
+        }
+      }
+
+      /* 5) Storage: upload → public read → delete */
+      const probePath = `database/probe-${Date.now()}.json`;
+      if (typeof File === "undefined") {
+        set("st-bucket", { status: "warn", detail: "الرفع غير مدعوم في بيئة الخادم (client-only)" });
+        set("st-read", { status: "warn", detail: "تُخطي — بيئة الخادم" });
+        set("st-del", { status: "warn", detail: "تُخطي" });
+      } else {
+        try {
+          const probeFile = new File([JSON.stringify({ probe: true, at: new Date().toISOString() })], "probe.json", { type: "application/json" });
+          const { error: upErr } = await sb.storage.from(BACKUP_BUCKET).upload(probePath, probeFile, { upsert: true, contentType: "application/json" });
+          if (upErr) {
+            set("st-bucket", { status: "fail", detail: upErr.message });
+            set("st-read", { status: "warn", detail: "تُخطي — فشل الرفع" });
+            set("st-del", { status: "warn", detail: "تُخطي" });
+          } else {
+            set("st-bucket", { status: "pass", detail: probePath });
+            const { data } = sb.storage.from(BACKUP_BUCKET).getPublicUrl(probePath);
+            const publicUrl = data?.publicUrl;
+            if (!publicUrl) {
+              set("st-read", { status: "fail", detail: "تعذّر الحصول على publicUrl" });
+            } else {
+              try {
+                const res = await fetch(publicUrl, { cache: "no-store" });
+                set("st-read", res.ok ? { status: "pass", detail: "القراءة العامة تعمل" } : { status: "fail", detail: `HTTP ${res.status} — سياسة القراءة العامة ناقصة` });
+              } catch (e: any) {
+                set("st-read", { status: "fail", detail: e?.message ?? "تعذّر الوصول العام للحاوية" });
+              }
+            }
+            const { error: delErr } = await sb.storage.from(BACKUP_BUCKET).remove([probePath]);
+            set("st-del", delErr ? { status: "fail", detail: delErr.message } : { status: "pass" });
+          }
+        } catch (e: any) {
+          set("st-bucket", { status: "warn", detail: e?.message ?? String(e) });
+          set("st-read", { status: "warn", detail: "تُخطي — خطأ أثناء الرفع" });
+          set("st-del", { status: "warn", detail: "تُخطي" });
+        }
+      }
+
+      /* 6) RLS — anonymous client (no session) */
+      if (!SUPABASE_URL || !SUPABASE_ANON_KEY) {
+        set("rls-anon-read", { status: "warn", detail: "SUPABASE_URL / ANON_KEY غير مضبطان" });
+        set("rls-anon-write", { status: "warn", detail: "تخطي — مفتاح ANON مفقود" });
+      } else {
+        try {
+          const anon = createClient(SUPABASE_URL, SUPABASE_ANON_KEY, {
+            auth: { persistSession: false, autoRefreshToken: false, detectSessionInUrl: false },
+          });
+          const { error: anonRead } = await anon.from("projects").select("id").limit(1);
+          set("rls-anon-read", !anonRead
+            ? { status: "pass", detail: "القراءة العامة للمحتوى المنشور مسموحة" }
+            : { status: "fail", detail: anonRead.message });
+
+          const { error: anonWrite } = await anon.from("projects").insert({ id: "rls-probe", title_ar: "x" });
+          set("rls-anon-write", anonWrite
+            ? { status: "pass", detail: "الكتابة المجهولة مرفوضة كما هو متوقع" }
+            : { status: "fail", detail: "خطر: مستخدم مجهول استطاع الكتابة! راجع سياسات RLS" });
+        } catch (e: any) {
+          set("rls-anon-read", { status: "warn", detail: e?.message ?? String(e) });
+          set("rls-anon-write", { status: "warn", detail: e?.message ?? String(e) });
+        }
+      }
+
+      /* admin write to activity_logs */
+      try {
+        const genId = typeof crypto !== "undefined" && typeof (crypto as any).randomUUID === "function"
+          ? (crypto as any).randomUUID()
+          : `diag-${Date.now()}-${Math.random().toString(36).slice(2, 8)}`;
+        const { error: adminWrite } = await sb.from("activity_logs").insert({
+          id: genId,
+          created_at: new Date().toISOString(),
+          user_id: user?.id ?? "",
+          user_name: "diagnostics",
+          action: "فحص النظام",
+          resource: "diagnostics",
+          details: "RLS admin write probe",
+        });
+        set("rls-admin-write", !adminWrite ? { status: "pass" } : { status: "fail", detail: adminWrite.message });
+      } catch (e: any) {
+        set("rls-admin-write", { status: "warn", detail: e?.message ?? String(e) });
+      }
+
+      /* 7) Realtime */
+      try {
+        await new Promise<void>((resolve) => {
+          const ch = sb.channel(`diag-${Date.now()}`).on("postgres_changes", { event: "*", schema: "public" }, () => undefined);
+          ch.subscribe((status) => {
+            set("rt", status === "SUBSCRIBED"
+              ? { status: "pass", detail: "القناة مفتوحة — المزامنة اللحظية جاهزة" }
+              : status === "CHANNEL_ERROR" || status === "TIMED_OUT"
+                ? { status: "fail", detail: String(status) } : { status: "running" });
+            if (status === "SUBSCRIBED" || status === "CHANNEL_ERROR" || status === "TIMED_OUT") {
+              try { sb.removeChannel(ch); } catch { /* ignore */ }
+              resolve();
+            }
+          });
+          setTimeout(() => { try { sb.removeChannel(ch); } catch { /* ignore */ } resolve(); }, 6000);
+        });
+      } catch (e: any) {
+        set("rt", { status: "warn", detail: e?.message ?? String(e) });
+      }
+
+    } catch (err: any) {
+      // unexpected top-level error — mark a general failure and include the message in the report
+      console.error("Diagnostics run failed:", err);
+      setChecks((prev) => prev.map((c) => (c.status === "running" ? { ...c, status: "warn", detail: err?.message ?? String(err) } : c)));
+    } finally {
+      finish();
+    }
   };
 
   const counts = {

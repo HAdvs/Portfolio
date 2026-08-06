@@ -40,7 +40,7 @@ function ServiceIcon({ i }: { i: number }) {
 
 /* ================= About ================= */
 export function About() {
-  const { t, logo, clients, lang } = useSite();
+const { t, clients, lang } = useSite();
   const ref = useRef<HTMLDivElement>(null);
   const { scrollYProgress } = useScroll({ target: ref, offset: ["start end", "end start"] });
   const y = useTransform(scrollYProgress, [0, 1], [50, -50]);
