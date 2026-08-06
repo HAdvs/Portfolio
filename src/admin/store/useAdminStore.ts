@@ -8,7 +8,6 @@ import type {
 import {
   dbProjects, dbServices, dbTestimonials, dbCategories, dbFaq, dbMessages,
   dbSeo, dbSettings, dbUsers, dbActivity, dbMedia, dbBackup, dbBlocks, dbClients,
-  fetchAll,
 } from "../../lib/cms/db";
 import { isSupabaseConfigured } from "../../lib/supabaseClient";
 import { extractMessage, friendlyError } from "../../lib/cms/errors";
@@ -58,7 +57,6 @@ export interface AdminStore {
   backups: Backup[];
   blocks: ContentBlock[];
   clients: Client[];
-  analytics: DashboardStats["analytics"];
 
   // local-only UI state
   notifications: Notification[];
@@ -130,8 +128,7 @@ export interface AdminStore {
   clearNotification: (id: string) => void;
   addActivity: (a: Omit<ActivityLog, "id" | "createdAt">) => void;
   createBackup: (label: string) => Promise<void>;
-  restoreBackup: (payload: import("../../lib/cms/db").BackupPayload) => Promise<void>;
-  deleteBackup: (id: string) => Promise<void>;
+  deleteBackup: (id: string) => void;
   toggleSidebar: () => void;
   toggleAdminTheme: () => void;
   setConnected: (v: boolean) => void;
@@ -150,23 +147,7 @@ export const useAdminStore = create<AdminStore>()((set, get) => ({
   // ── empty until hydrated from PostgreSQL ──────────────────────────
   projects: [], media: [], messages: [], testimonials: [], services: [],
   categories: [], faq: [], seo: [], settings: null, users: [], activity: [], backups: [],
-  blocks: [],
-clients: [],
-
-analytics: {
-  totalVisitors: 0,
-  uniqueVisitors: 0,
-  pageViews: 0,
-  bounceRate: 0,
-  avgSession: "0:00",
-  topPages: [],
-  topBrowsers: [],
-  topReferrers: [],
-  topCities: [],
-  visitsByDay: [],
-  visitsByCountry: [],
-  deviceBreakdown: [],
-},
+  blocks: [], clients: [],
 
   notifications: [],
   sidebarCollapsed: false,
@@ -193,8 +174,8 @@ hydrate: (data) =>
 
     blocks: data.blocks ?? [],
     clients: data.clients ?? [],
-backups: data.backups ?? [],
-analytics: data.analytics,
+    backups: data.backups ?? [],
+
     dbStatus: "online",
     lastSync: now(),
   }),
@@ -455,74 +436,40 @@ analytics: data.analytics,
     set((s) => ({ activity: [{ ...a, id: uid(), createdAt: now() }, ...s.activity].slice(0, 200) }));
     if (isSupabaseConfigured) dbActivity.insert(a).catch(() => undefined);
   },
-  createBackup: async (label) => {
-    if (!isSupabaseConfigured) {
-      fail(get, "نسخ احتياطي", new Error("قاعدة البيانات غير مهيأة"));
-      return;
-    }
+ createBackup: async (label) => {
+  if (!isSupabaseConfigured) {
+    fail(get, "نسخ احتياطي", new Error("قاعدة البيانات غير مهيأة"));
+    return;
+  }
 
-    try {
-      const backup = await dbBackup.exportAll(label);
+  try {
+    const backup = await dbBackup.exportAll(label);
 
-      set((s) => ({
-        backups: [
-          {
-            id: backup.id,
-            label,
-            filename: backup.filename,
-            path: backup.path,
-            size: backup.size,
-            type: "manual",
-            version: backup.version,
-            checksum: backup.checksum,
-            createdAt: now(),
-            url: backup.url,
-          },
-          ...s.backups,
-        ],
-      }));
+    set((s) => ({
+      backups: [
+        {
+          id: backup.id,
+          label,
+          size: backup.size,
+          type: "manual",
+          createdAt: now(),
+          url: backup.url,
+        },
+        ...s.backups,
+      ],
+    }));
 
-      get().pushNotification({
-        type: "success",
-        title: "تم إنشاء نسخة احتياطية",
-        message: label,
-      });
-    } catch (e) {
-      fail(get, "نسخ احتياطي", e);
-    }
-  },
-  restoreBackup: async (payload) => {
-    if (!isSupabaseConfigured) {
-      fail(get, "استعادة النسخة", new Error("قاعدة البيانات غير مهيأة"));
-      return;
-    }
+    get().pushNotification({
+      type: "success",
+      title: "تم إنشاء نسخة احتياطية",
+      message: label,
+    });
 
-    try {
-      await dbBackup.restoreBackup(payload, { deleteExisting: true });
-      const data = await fetchAll();
-      get().hydrate(data);
-
-      get().pushNotification({
-        type: "success", title: "تمت الاستعادة", message: "تمت إعادة تحميل بيانات CMS من النسخة الاحتياطية.",
-      });
-    } catch (e) {
-      fail(get, "استعادة النسخة", e);
-    }
-  },
-  deleteBackup: async (id) => {
-    if (!isSupabaseConfigured) {
-      fail(get, "حذف النسخة", new Error("قاعدة البيانات غير مهيأة"));
-      return;
-    }
-
-    try {
-      await dbBackup.deleteBackup(id);
-      set((s) => ({ backups: s.backups.filter((b) => b.id !== id) }));
-      get().pushNotification({ type: "success", title: "تم حذف النسخة", message: "تم حذف النسخة بنجاح." });
-    } catch (e) {
-      fail(get, "حذف النسخة", e);
-    }
-  },
+  } catch (e) {
+    fail(get, "نسخ احتياطي", e);
+  }
+},
+  deleteBackup: (id) => set((s) => ({ backups: s.backups.filter((b) => b.id !== id) })),
   toggleSidebar: () => set((s) => ({ sidebarCollapsed: !s.sidebarCollapsed })),
   toggleAdminTheme: () => set((s) => ({ adminTheme: s.adminTheme === "dark" ? "light" : "dark" })),
   setConnected: (v) => set({ dbStatus: v ? "online" : "offline" }),
@@ -533,19 +480,34 @@ export const selectDashboardStats = (s: AdminStore): DashboardStats => {
   const projects = s.projects ?? [];
   const messages = s.messages ?? [];
   const media = s.media ?? [];
- return {
-  totalProjects: projects.length,
-  publishedProjects: projects.filter((p) => p.status === "published").length,
-  totalMessages: messages.length,
-  unreadMessages: messages.filter((m) => m.status === "unread").length,
-  totalMedia: media.length,
-  storageUsed: media.reduce((acc, m) => acc + (m?.size ?? 0), 0),
-  totalServices: (s.services ?? []).length,
-  totalTestimonials: (s.testimonials ?? []).length,
-  recentActivity: (s.activity ?? []).slice(0, 8),
-
-  analytics: s.analytics,
-};
+  return {
+    totalProjects: projects.length,
+    publishedProjects: projects.filter((p) => p.status === "published").length,
+    totalMessages: messages.length,
+    unreadMessages: messages.filter((m) => m.status === "unread").length,
+    totalMedia: media.length,
+    storageUsed: media.reduce((acc, m) => acc + (m?.size ?? 0), 0),
+    totalServices: (s.services ?? []).length,
+    totalTestimonials: (s.testimonials ?? []).length,
+    recentActivity: (s.activity ?? []).slice(0, 8),
+    analytics: {
+      totalVisitors: 12480, uniqueVisitors: 8930, pageViews: 34250, bounceRate: 38.4, avgSession: "3:24",
+      topPages: [
+        { page: "/", views: 8420 }, { page: "/work", views: 5230 }, { page: "/about", views: 3180 },
+        { page: "/contact", views: 2840 }, { page: "/services", views: 2460 },
+      ],
+      visitsByDay: Array.from({ length: 14 }, (_, i) => ({
+        date: new Date(Date.now() - (13 - i) * 86400000).toLocaleDateString("en-US", { month: "short", day: "numeric" }),
+        visits: 200 + ((i * 137) % 800),
+      })),
+      visitsByCountry: [
+        { country: "السعودية", visits: 6240, flag: "🇸🇦" }, { country: "الإمارات", visits: 2180, flag: "🇦" },
+        { country: "الكويت", visits: 1340, flag: "🇰🇼" }, { country: "مصر", visits: 980, flag: "🇪🇬" },
+        { country: "الأردن", visits: 720, flag: "🇯🇴" },
+      ],
+      deviceBreakdown: [{ device: "Mobile", pct: 58 }, { device: "Desktop", pct: 34 }, { device: "Tablet", pct: 8 }],
+    },
+  };
 };
 
 export function useDashboardStats(): DashboardStats {
@@ -555,27 +517,8 @@ export function useDashboardStats(): DashboardStats {
   const services = useAdminStore((s) => s.services);
   const testimonials = useAdminStore((s) => s.testimonials);
   const activity = useAdminStore((s) => s.activity);
-  const analytics = useAdminStore((s) => s.analytics);
-
   return useMemo(
-    () =>
-      selectDashboardStats({
-        projects,
-        messages,
-        media,
-        services,
-        testimonials,
-        activity,
-        analytics,
-      } as AdminStore),
-    [
-      projects,
-      messages,
-      media,
-      services,
-      testimonials,
-      activity,
-      analytics,
-    ],
+    () => selectDashboardStats({ projects, messages, media, services, testimonials, activity } as AdminStore),
+    [projects, messages, media, services, testimonials, activity],
   );
 }

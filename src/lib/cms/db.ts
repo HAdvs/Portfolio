@@ -1,24 +1,23 @@
-﻿import {
+import {
   supabase,
   STORAGE_BUCKET,
   BACKUP_BUCKET,
 } from "../supabaseClient";
-import { dbAnalytics } from "./analytics";
 import type {
   ActivityLog, AdminUser, Category, Client, ContentBlock, FaqItem, MediaFile, Message,
   Project, SeoConfig, Service, SiteSettings, Testimonial, UserRole,
 } from "../../admin/types";
 
-/* â•گâ•گâ•گâ•گâ•گâ•گâ•گâ•گâ•گâ•گâ•گâ•گâ•گâ•گâ•گâ•گâ•گâ•گâ•گâ•گâ•گâ•گâ•گâ•گâ•گâ•گâ•گâ•گâ•گâ•گâ•گâ•گâ•گâ•گâ•گâ•گâ•گâ•گâ•گâ•گâ•گâ•گâ•گâ•گâ•گâ•گâ•گâ•گâ•گâ•گâ•گâ•گâ•گâ•گâ•گâ•گâ•گâ•گâ•گâ•گâ•گâ•گâ•گâ•گâ•گâ•گâ•گâ•گ
-   Repository layer â€” the SINGLE translation boundary between the app
+/* ════════════════════════════════════════════════════════════════════
+   Repository layer — the SINGLE translation boundary between the app
    model (slugs / names / URLs) and the relational Supabase schema
    (category_id / client_id / cover_media_id).
 
-   â€¢ Reads  JOIN categories & clients and hydrate app-friendly fields.
-   â€¢ Writes RESOLVE slugs/names to foreign keys and never send columns
+   • Reads  JOIN categories & clients and hydrate app-friendly fields.
+   • Writes RESOLVE slugs/names to foreign keys and never send columns
      that don't exist in the database (fixes "Could not find the
      'category' column of 'projects'").
-   â•گâ•گâ•گâ•گâ•گâ•گâ•گâ•گâ•گâ•گâ•گâ•گâ•گâ•گâ•گâ•گâ•گâ•گâ•گâ•گâ•گâ•گâ•گâ•گâ•گâ•گâ•گâ•گâ•گâ•گâ•گâ•گâ•گâ•گâ•گâ•گâ•گâ•گâ•گâ•گâ•گâ•گâ•گâ•گâ•گâ•گâ•گâ•گâ•گâ•گâ•گâ•گâ•گâ•گâ•گâ•گâ•گâ•گâ•گâ•گâ•گâ•گâ•گâ•گâ•گâ•گâ•گâ•گ */
+   ════════════════════════════════════════════════════════════════════ */
 
 const db = () => {
   if (!supabase) throw new Error("Supabase is not configured");
@@ -27,142 +26,7 @@ const db = () => {
 
 const ts = (v: unknown) => (v as string) ?? new Date().toISOString();
 
-const TEXT_ENCODER = new TextEncoder();
-const BACKUP_VERSION = "2.0";
-const BACKUP_SITE = "YourMark CMS";
-const BACKUP_TABLES = [
-  "projects",
-  "media",
-  "messages",
-  "testimonials",
-  "services",
-  "categories",
-  "faq",
-  "seo",
-  "settings",
-  "users",
-  "activity",
-  "blocks",
-  "clients",
-  "backups",
-] as const;
-
-type BackupDatabase = {
-  projects: Project[];
-  media: MediaFile[];
-  messages: Message[];
-  testimonials: Testimonial[];
-  services: Service[];
-  categories: Category[];
-  faq: FaqItem[];
-  seo: SeoConfig[];
-  settings: SiteSettings[];
-  users: AdminUser[];
-  activity: ActivityLog[];
-  blocks: ContentBlock[];
-  clients: Client[];
-  backups: { id: string; label: string; filename?: string; path?: string; url?: string; size: number; type: "auto" | "manual"; version?: string; checksum?: string; createdBy?: string; createdAt: string }[];
-};
-
-export type BackupPayload = {
-  version: string;
-  createdAt: string;
-  site: string;
-  database: BackupDatabase;
-};
-
-async function digestHex(data: Uint8Array | ArrayBuffer) {
-  const buffer = data instanceof ArrayBuffer ? data : data.buffer;
-  const hash = await crypto.subtle.digest("SHA-256", buffer);
-  return Array.from(new Uint8Array(hash)).map((b) => b.toString(16).padStart(2, "0")).join("");
-}
-
-function ensureRecord(value: unknown, name: string): Record<string, unknown> {
-  if (!value || typeof value !== "object" || Array.isArray(value)) {
-    throw new Error(`Backup validation failed: ${name} must be an object`);
-  }
-  return value as Record<string, unknown>;
-}
-
-function ensureArray(value: unknown, name: string): unknown[] {
-  if (!Array.isArray(value)) throw new Error(`Backup validation failed: ${name} must be an array`);
-  return value;
-}
-
-function mapBackupRow(r: Record<string, unknown>) {
-  return {
-    id: r.id as string,
-    label: (r.label as string) ?? "",
-    filename: (r.filename as string) ?? undefined,
-    path: (r.path as string) ?? undefined,
-    url: (r.url as string) ?? undefined,
-    size: (r.size as number) ?? 0,
-    type: (r.type as "auto" | "manual") ?? "manual",
-    version: (r.version as string) ?? undefined,
-    checksum: (r.checksum as string) ?? undefined,
-    createdBy: (r.created_by as string) ?? undefined,
-    createdAt: ts(r.created_at),
-  };
-}
-
-function validateBackupPayload(raw: unknown): BackupPayload {
-  const value = ensureRecord(raw, "backup payload");
-  const version = value.version;
-  const createdAt = value.createdAt;
-  const site = value.site;
-  const database = ensureRecord(value.database, "database");
-
-  if (typeof version !== "string" || !version.trim()) {
-    throw new Error("Backup validation failed: version is missing or invalid");
-  }
-  if (version !== BACKUP_VERSION) {
-    throw new Error(`Unsupported backup version ${version}. Expected ${BACKUP_VERSION}`);
-  }
-  if (typeof createdAt !== "string" || !createdAt.trim()) {
-    throw new Error("Backup validation failed: createdAt is missing or invalid");
-  }
-  if (typeof site !== "string" || !site.trim()) {
-    throw new Error("Backup validation failed: site is missing or invalid");
-  }
-
-  const missing = BACKUP_TABLES.filter((table) => !Array.isArray(database[table]));
-  if (missing.length) {
-    throw new Error(`Backup validation failed: missing tables ${missing.join(", ")}`);
-  }
-
-  return {
-    version,
-    createdAt,
-    site,
-    database: {
-      projects: database.projects as Project[],
-      media: database.media as MediaFile[],
-      messages: database.messages as Message[],
-      testimonials: database.testimonials as Testimonial[],
-      services: database.services as Service[],
-      categories: database.categories as Category[],
-      faq: database.faq as FaqItem[],
-      seo: database.seo as SeoConfig[],
-      settings: database.settings as SiteSettings[],
-      users: database.users as AdminUser[],
-      activity: database.activity as ActivityLog[],
-      blocks: database.blocks as ContentBlock[],
-      clients: database.clients as Client[],
-      backups: database.backups as BackupDatabase["backups"],
-    },
-  };
-}
-
-function getBackupSummary(payload: BackupPayload) {
-  return {
-    version: payload.version,
-    createdAt: payload.createdAt,
-    site: payload.site,
-    counts: BACKUP_TABLES.map((table) => ({ table, count: (payload.database as any)[table]?.length ?? 0 })),
-  };
-}
-
-/* â”€â”€ Mappers: DB row â†’ app entity â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€ */
+/* ── Mappers: DB row → app entity ─────────────────────────────────── */
 function mapProject(r: Record<string, unknown>): Project {
   const cat = r.categories as { slug?: string } | null;
   const cli = r.clients as { name_ar?: string; name_en?: string } | null;
@@ -242,24 +106,6 @@ const mapSeo = (r: Record<string, unknown>): SeoConfig => ({
   updatedAt: ts(r.updated_at),
 });
 
-function seoCore(seo: Partial<SeoConfig>) {
-  const row: Record<string, unknown> = {};
-  if (seo.id !== undefined) row.id = seo.id;
-  if (seo.page !== undefined) row.page = seo.page;
-  if (seo.title_ar !== undefined) row.title_ar = seo.title_ar;
-  if (seo.title_en !== undefined) row.title_en = seo.title_en;
-  if (seo.description_ar !== undefined) row.description_ar = seo.description_ar;
-  if (seo.description_en !== undefined) row.description_en = seo.description_en;
-  if (seo.keywords !== undefined) row.keywords = seo.keywords;
-  if (seo.og_title !== undefined) row.og_title = seo.og_title;
-  if (seo.og_description !== undefined) row.og_description = seo.og_description;
-  if (seo.og_image !== undefined) row.og_image = seo.og_image;
-  if (seo.twitter_card !== undefined) row.twitter_card = seo.twitter_card;
-  if (seo.canonical !== undefined) row.canonical = seo.canonical;
-  if (seo.robots !== undefined) row.robots = seo.robots;
-  return row;
-}
-
 const mapSettings = (r: Record<string, unknown>): SiteSettings => ({
   id: (r.id as string) ?? "site", site_name: (r.site_name as string) ?? "YourMark",
   tagline_ar: (r.tagline_ar as string) ?? "", tagline_en: (r.tagline_en as string) ?? "",
@@ -276,39 +122,6 @@ const mapSettings = (r: Record<string, unknown>): SiteSettings => ({
   maintenance_mode: !!r.maintenance_mode, default_lang: (r.default_lang as "ar" | "en") ?? "ar",
   timezone: (r.timezone as string) ?? "Asia/Riyadh", updatedAt: ts(r.updated_at),
 });
-
-function settingsCore(data: Partial<SiteSettings>) {
-  const row: Record<string, unknown> = {};
-  if (data.site_name !== undefined) row.site_name = data.site_name;
-  if (data.tagline_ar !== undefined) row.tagline_ar = data.tagline_ar;
-  if (data.tagline_en !== undefined) row.tagline_en = data.tagline_en;
-  if (data.logo_url !== undefined) row.logo_url = data.logo_url;
-  if (data.favicon_url !== undefined) row.favicon_url = data.favicon_url;
-  if (data.og_image !== undefined) row.og_image = data.og_image;
-  if (data.primary_color !== undefined) row.primary_color = data.primary_color;
-  if (data.secondary_color !== undefined) row.secondary_color = data.secondary_color;
-  if (data.accent_color !== undefined) row.accent_color = data.accent_color;
-  if (data.font_ar !== undefined) row.font_ar = data.font_ar;
-  if (data.font_en !== undefined) row.font_en = data.font_en;
-  if (data.email !== undefined) row.email = data.email;
-  if (data.phone !== undefined) row.phone = data.phone;
-  if (data.whatsapp !== undefined) row.whatsapp = data.whatsapp;
-  if (data.location_ar !== undefined) row.location_ar = data.location_ar;
-  if (data.location_en !== undefined) row.location_en = data.location_en;
-  if (data.social_instagram !== undefined) row.social_instagram = data.social_instagram;
-  if (data.social_behance !== undefined) row.social_behance = data.social_behance;
-  if (data.social_linkedin !== undefined) row.social_linkedin = data.social_linkedin;
-  if (data.social_x !== undefined) row.social_x = data.social_x;
-  if (data.social_youtube !== undefined) row.social_youtube = data.social_youtube;
-  if (data.social_dribbble !== undefined) row.social_dribbble = data.social_dribbble;
-  if (data.ga_id !== undefined) row.ga_id = data.ga_id;
-  if (data.gtm_id !== undefined) row.gtm_id = data.gtm_id;
-  if (data.hotjar_id !== undefined) row.hotjar_id = data.hotjar_id;
-  if (data.maintenance_mode !== undefined) row.maintenance_mode = data.maintenance_mode;
-  if (data.default_lang !== undefined) row.default_lang = data.default_lang;
-  if (data.timezone !== undefined) row.timezone = data.timezone;
-  return row;
-}
 
 const mapUser = (r: Record<string, unknown>): AdminUser => ({
   id: r.id as string, username: (r.username as string) ?? "", email: (r.email as string) ?? "",
@@ -337,9 +150,9 @@ const mapClient = (r: Record<string, unknown>): Client => ({
   order_index: (r.order_index as number) ?? 0, visible: r.visible !== false,
 });
 
-/* â”€â”€ FK resolvers: slug/name â†’ UUID id (creating the row when needed) â”€
+/* ── FK resolvers: slug/name → UUID id (creating the row when needed) ─
    All generated ids are UUIDs so they are valid whether the target
-   column is `uuid` or `text` â€” no mixed identifier types anywhere. */
+   column is `uuid` or `text` — no mixed identifier types anywhere. */
 const newId = () =>
   typeof crypto !== "undefined" && "randomUUID" in crypto
     ? crypto.randomUUID()
@@ -353,7 +166,7 @@ async function resolveCategoryId(slug: string | undefined): Promise<string | nul
   const id = newId();
   const { error } = await s.from("categories").insert({ id, slug, label_ar: slug, label_en: slug });
   if (error) {
-    // slug may already exist under another id (unique constraint) â€” reuse it
+    // slug may already exist under another id (unique constraint) — reuse it
     const retry = await s.from("categories").select("id").eq("slug", slug).maybeSingle();
     if (retry.data?.id) return retry.data.id as string;
     throw error;
@@ -372,7 +185,7 @@ async function resolveClientId(name: string | undefined): Promise<string | null>
   return id;
 }
 
-/* â”€â”€ Fetch everything (single hydration pass) â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€ */
+/* ── Fetch everything (single hydration pass) ─────────────────────── */
 export async function fetchAll() {
   const s = db();
   const [
@@ -417,7 +230,6 @@ export async function fetchAll() {
     ]);
 
   const fatal = [projects, media, messages, testimonials, services, categories, faq, seo].find((r) => r.error);
-  const analytics = await dbAnalytics.getDashboardStats();
   if (fatal?.error) throw fatal.error;
 
   return {
@@ -434,15 +246,20 @@ export async function fetchAll() {
   activity: (activity.data ?? []).map(mapActivity),
   blocks: (blocks.data ?? []).map(mapBlock),
   clients: (clients.data ?? []).map(mapClient),
- 
-  backups: (backups.data ?? []).map((b) => mapBackupRow(b)),
- 
-  analytics,
+
+  backups: (backups.data ?? []).map((b) => ({
+    id: b.id,
+    label: b.label,
+    url: b.url,
+    size: b.size,
+    type: b.type,
+    createdAt: b.created_at,
+  })),
 };
 }
 
-/* â”€â”€ Projects CRUD (FK-aware) â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€ */
-/** App model â†’ DB row. Only real columns; never `category`/`client` text. */
+/* ── Projects CRUD (FK-aware) ─────────────────────────────────────── */
+/** App model → DB row. Only real columns; never `category`/`client` text. */
 function projectCore(p: Partial<Project>) {
   return {
     title_ar: p.title_ar, title_en: p.title_en, slug: p.slug || null,
@@ -542,7 +359,7 @@ export const dbProjects = {
   },
 };
 
-/* â”€â”€ Generic table helpers â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€ */
+/* ── Generic table helpers ────────────────────────────────────────── */
 function tableOps<T extends { id: string }>(table: string, toRow: (e: Partial<T>) => Record<string, unknown>) {
   return {
     async insert(e: T) {
@@ -591,40 +408,10 @@ export const dbMessages = {
 };
 
 export const dbSeo = {
-  async get(page: string) {
-    const { data, error } = await db().from("seo_configs").select("*").eq("page", page).maybeSingle();
-    if (error) throw error;
-    return data ? mapSeo(data) : null;
-  },
-
-  async list() {
-    const { data, error } = await db().from("seo_configs").select("*");
-    if (error) throw error;
-    return (data ?? []).map(mapSeo);
-  },
-
-  async insert(seo: SeoConfig) {
-    const { error } = await db().from("seo_configs").insert({ ...seoCore(seo), updated_at: new Date().toISOString() });
-    if (error) throw error;
-  },
-
-  async update(page: string, seo: Partial<SeoConfig>) {
+  async upsert(page: string, data: Partial<SeoConfig>) {
     const { error } = await db()
       .from("seo_configs")
-      .update({ ...seoCore(seo), updated_at: new Date().toISOString() })
-      .eq("page", page);
-    if (error) throw error;
-  },
-
-  async upsert(page: string, seo: Partial<SeoConfig>) {
-    const { error } = await db()
-      .from("seo_configs")
-      .upsert({ page, ...seoCore(seo), updated_at: new Date().toISOString() }, { onConflict: "page" });
-    if (error) throw error;
-  },
-
-  async remove(page: string) {
-    const { error } = await db().from("seo_configs").delete().eq("page", page);
+      .upsert({ page, ...data, updated_at: new Date().toISOString() }, { onConflict: "page" });
     if (error) throw error;
   },
 };
@@ -633,7 +420,7 @@ export const dbSettings = {
   async update(data: Partial<SiteSettings>) {
     const { error } = await db()
       .from("site_settings")
-      .upsert({ id: "site", ...settingsCore(data), updated_at: new Date().toISOString() }, { onConflict: "id" });
+      .upsert({ id: "site", ...data, updated_at: new Date().toISOString() }, { onConflict: "id" });
     if (error) throw error;
   },
 };
@@ -655,24 +442,14 @@ export const dbUsers = {
 
 export const dbActivity = {
   async insert(a: Omit<ActivityLog, "id" | "createdAt">) {
-    const { error } = await db().from("activity_logs").insert({
-      id: crypto.randomUUID(),
-
-      user_id: a.userId,
-      user_name: a.userName,
-      action: a.action,
-      resource: a.resource,
-      resource_id: a.resourceId,
-      details: a.details,
-
-      created_at: new Date().toISOString(),
-    });
-
-    if (error) throw error;
+    await db().from("activity_logs").insert({
+      user_id: a.userId, user_name: a.userName, action: a.action,
+      resource: a.resource, resource_id: a.resourceId, details: a.details,
+    }).then(({ error }) => { if (error) console.warn("[activity]", error.message); });
   },
 };
 
-/* â”€â”€ Media: Storage â†’ media_files row â†’ linkable id â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€ */
+/* ── Media: Storage → media_files row → linkable id ───────────────── */
 const ALLOWED_EXT = new Set([
   "jpg",
   "jpeg",
@@ -686,27 +463,26 @@ const ALLOWED_EXT = new Set([
   "json",
 ]);
 const MAX_UPLOAD_BYTES = 15 * 1024 * 1024; // 15 MB
-const MAX_BACKUP_BYTES = 100 * 1024 * 1024; // 100 MB
 
-/** Validate before touching Storage â€” extension, size and declared type. */
-function validateUpload(file: File, maxSize: number = MAX_UPLOAD_BYTES) {
+/** Validate before touching Storage — extension, size and declared type. */
+function validateUpload(file: File) {
   const ext = (file.name.split(".").pop() ?? "").toLowerCase();
   if (!ALLOWED_EXT.has(ext))
-    throw new Error(`ط§ظ…طھط¯ط§ط¯ .${ext || "?"} ط؛ظٹط± ظ…ط³ظ…ظˆط­ â€” ط§ظ„ظ…ط³ظ…ظˆط­: ${[...ALLOWED_EXT].join(", ")}`);
-  if (file.size > maxSize)
-    throw new Error(`ط­ط¬ظ… ط§ظ„ظ…ظ„ظپ ${(file.size / 1048576).toFixed(1)}MB ظٹطھط¬ط§ظˆط² ط§ظ„ط­ط¯ (${(maxSize / 1048576).toFixed(0)}MB)`);
-  if (file.size === 0) throw new Error("ط§ظ„ظ…ظ„ظپ ظپط§ط±ط؛");
+    throw new Error(`امتداد .${ext || "?"} غير مسموح — المسموح: ${[...ALLOWED_EXT].join(", ")}`);
+  if (file.size > MAX_UPLOAD_BYTES)
+    throw new Error(`حجم الملف ${(file.size / 1048576).toFixed(1)}MB يتجاوز الحد (15MB)`);
+  if (file.size === 0) throw new Error("الملف فارغ");
 }
 
 export const dbMedia = {
   /** 1) Validate. 2) Upload to Storage. 3) Return public URL + path. */
   async upload(
-    file: File,
-    folder: string,
-    bucket: string = STORAGE_BUCKET,
-    maxSize: number = MAX_UPLOAD_BYTES
-  ): Promise<{ url: string; path: string; size: number }> {
-    validateUpload(file, maxSize);
+  file: File,
+  folder: string,
+  bucket: string = STORAGE_BUCKET
+): Promise<{ url: string; path: string; size: number }> {
+    
+    validateUpload(file);
     const s = db();
     const ext = file.name.split(".").pop() ?? "bin";
     const path = `${folder}/${Date.now()}-${Math.random().toString(36).slice(2, 8)}.${ext}`;
@@ -771,51 +547,56 @@ export const dbClients = tableOps<Client>("clients", (x) => ({
 }));
 
 export const dbBackup = {
-  async exportAll(label: string): Promise<{ id: string; url: string; size: number; version: string; checksum: string; filename: string; path: string }> {
+  async exportAll(
+    label: string
+  ): Promise<{ id: string; url: string; size: number }> {
     const data = await fetchAll();
-    const payload: BackupPayload = {
-      version: BACKUP_VERSION,
-      createdAt: new Date().toISOString(),
-      site: BACKUP_SITE,
-      database: {
-        projects: data.projects,
-        media: data.media,
-        messages: data.messages,
-        testimonials: data.testimonials,
-        services: data.services,
-        categories: data.categories,
-        faq: data.faq,
-        seo: data.seo,
-        settings: data.settings ? [data.settings] : [],
-        users: data.users,
-        activity: data.activity,
-        blocks: data.blocks,
-        clients: data.clients,
-        backups: data.backups,
-      },
-    };
 
-    const content = JSON.stringify(payload, null, 2);
-    const checksum = await digestHex(TEXT_ENCODER.encode(content));
-    const filename = `backup-${Date.now()}-${label.replace(/[^a-zA-Z0-9-_]+/g, "-").replace(/^-+|-+$/g, "").slice(0, 40)}.json`;
-    const file = new File([content], filename, { type: "application/json" });
+    const blob = new Blob(
+      [
+        JSON.stringify(
+          {
+            label,
+            exportedAt: new Date().toISOString(),
+            data,
+          },
+          null,
+          2
+        ),
+      ],
+      {
+        type: "application/json",
+      }
+    );
 
-    const uploaded = await dbMedia.upload(file, "database", BACKUP_BUCKET, MAX_BACKUP_BYTES);
-    const currentUser = await db().auth.getUser();
-    const userId = currentUser.data?.user?.id ?? null;
+    const file = new File(
+      [blob],
+      `backup-${Date.now()}.json`,
+      {
+        type: "application/json",
+      }
+    );
 
+    // رفع الملف إلى Storage
+    const uploaded = await dbMedia.upload(
+      file,
+      "database",
+      BACKUP_BUCKET
+    );
+
+    // حفظ بيانات النسخة في قاعدة البيانات
+    const {
+  data: { user },
+} = await db().auth.getUser();
+
+console.log("Current user:", user);
     const { data: row, error } = await db()
       .from("backup_files")
       .insert({
         label,
-        filename,
-        path: uploaded.path,
         url: uploaded.url,
         size: uploaded.size,
-        version: BACKUP_VERSION,
-        checksum,
         type: "manual",
-        created_by: userId,
       })
       .select()
       .single();
@@ -826,111 +607,6 @@ export const dbBackup = {
       id: row.id,
       url: uploaded.url,
       size: uploaded.size,
-      version: row.version ?? BACKUP_VERSION,
-      checksum: row.checksum ?? checksum,
-      filename: row.filename ?? filename,
-      path: row.path ?? uploaded.path,
     };
-  },
-
-  async parseBackupFile(file: File) {
-    const content = await file.text();
-    const checksum = await digestHex(TEXT_ENCODER.encode(content));
-    const payload = validateBackupPayload(JSON.parse(content));
-    return { payload, checksum, filename: file.name, size: file.size };
-  },
-
-  async loadBackupPayload(id: string) {
-    const { data: row, error: rowError } = await db().from("backup_files").select("*").eq("id", id).maybeSingle();
-    if (rowError) throw rowError;
-    if (!row) throw new Error("Backup not found");
-    if (!row.path) throw new Error("Backup storage path is missing");
-
-    const { data: blob, error: downloadError } = await db().storage.from(BACKUP_BUCKET).download(row.path);
-    if (downloadError || !blob) throw downloadError ?? new Error("Failed to download backup file");
-
-    const content = await blob.text();
-    const checksum = await digestHex(TEXT_ENCODER.encode(content));
-    if (row.checksum && row.checksum !== checksum) {
-      throw new Error("Backup checksum mismatch — file may be corrupted");
-    }
-
-    const payload = validateBackupPayload(JSON.parse(content));
-    return { payload, checksum, row, filename: row.filename ?? row.path.split("/").pop() ?? "backup.json", size: content.length };
-  },
-
-  async downloadBackup(id: string) {
-    const { data: row, error } = await db().from("backup_files").select("*").eq("id", id).maybeSingle();
-    if (error) throw error;
-    if (!row || !row.path) throw new Error("Backup file not found");
-
-    const { data: blob, error: downloadError } = await db().storage.from(BACKUP_BUCKET).download(row.path);
-    if (downloadError || !blob) throw downloadError ?? new Error("Failed to download backup file");
-    return { blob, filename: row.filename ?? row.path.split("/").pop() ?? "backup.json" };
-  },
-
-  async deleteBackup(id: string) {
-    const { data: row, error } = await db().from("backup_files").select("path").eq("id", id).maybeSingle();
-    if (error) throw error;
-    if (!row) throw new Error("Backup file not found");
-    if (row.path) {
-      const { error: storageError } = await db().storage.from(BACKUP_BUCKET).remove([row.path]);
-      if (storageError) throw storageError;
-    }
-    const { error: deleteError } = await db().from("backup_files").delete().eq("id", id);
-    if (deleteError) throw deleteError;
-  },
-
-  async restoreBackup(payload: BackupPayload, options: { deleteExisting?: boolean } = {}) {
-    const s = db();
-    const deleteExisting = options.deleteExisting !== false;
-
-    if (deleteExisting) {
-      const deleteOrder = [
-        "projects",
-        "backup_files",
-        "activity_logs",
-        "content_blocks",
-        "seo_configs",
-        "site_settings",
-        "messages",
-        "testimonials",
-        "services",
-        "faq_items",
-        "media_files",
-        "profiles",
-        "clients",
-        "categories",
-      ];
-      for (const table of deleteOrder) {
-        const { error } = await s.from(table).delete();
-        if (error) throw new Error(`Failed to clear ${table}: ${error.message}`);
-      }
-    }
-
-    const insertOrder = [
-      { table: "categories", rows: payload.database.categories, conflict: "id" },
-      { table: "clients", rows: payload.database.clients, conflict: "id" },
-      { table: "profiles", rows: payload.database.users, conflict: "id" },
-      { table: "media_files", rows: payload.database.media, conflict: "id" },
-      { table: "services", rows: payload.database.services, conflict: "id" },
-      { table: "testimonials", rows: payload.database.testimonials, conflict: "id" },
-      { table: "faq_items", rows: payload.database.faq, conflict: "id" },
-      { table: "seo_configs", rows: payload.database.seo, conflict: "id" },
-      { table: "site_settings", rows: payload.database.settings, conflict: "id" },
-      { table: "content_blocks", rows: payload.database.blocks, conflict: "block_key" },
-      { table: "activity_logs", rows: payload.database.activity, conflict: "id" },
-      { table: "backup_files", rows: payload.database.backups, conflict: "id" },
-      { table: "messages", rows: payload.database.messages, conflict: "id" },
-      { table: "projects", rows: payload.database.projects, conflict: "id" },
-    ] as const;
-
-    for (const entry of insertOrder) {
-      if (!entry.rows.length) continue;
-      const { error } = await s.from(entry.table).upsert(entry.rows, { onConflict: entry.conflict });
-      if (error) {
-        throw new Error(`Failed to restore ${entry.table}: ${error.message}`);
-      }
-    }
   },
 };
