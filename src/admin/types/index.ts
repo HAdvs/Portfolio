@@ -255,6 +255,9 @@ export interface AnalyticsData {
   bounceRate: number;
   avgSession: string;
   topPages: { page: string; views: number }[];
+  topBrowsers: { browser: string; visits: number; pct: number }[];
+  topReferrers: { referrer: string; visits: number }[];
+  topCities: { city: string; visits: number }[];
   visitsByDay: { date: string; visits: number }[];
   visitsByCountry: { country: string; visits: number; flag: string }[];
   deviceBreakdown: { device: string; pct: number }[];
@@ -278,10 +281,15 @@ export interface DashboardStats {
 export interface Backup {
   id: string;
   label: string;
+  filename?: string;
+  path?: string;
+  url?: string;
   size: number;
   type: "auto" | "manual";
+  version?: string;
+  checksum?: string;
+  createdBy?: string;
   createdAt: string;
-  url?: string;
 }
 
 // ─── Client / brand ──────────────────────────────────────────────────────────

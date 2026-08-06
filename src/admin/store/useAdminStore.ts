@@ -8,6 +8,7 @@ import type {
 import {
   dbProjects, dbServices, dbTestimonials, dbCategories, dbFaq, dbMessages,
   dbSeo, dbSettings, dbUsers, dbActivity, dbMedia, dbBackup, dbBlocks, dbClients,
+  fetchAll,
 } from "../../lib/cms/db";
 import { isSupabaseConfigured } from "../../lib/supabaseClient";
 import { extractMessage, friendlyError } from "../../lib/cms/errors";
@@ -129,7 +130,8 @@ export interface AdminStore {
   clearNotification: (id: string) => void;
   addActivity: (a: Omit<ActivityLog, "id" | "createdAt">) => void;
   createBackup: (label: string) => Promise<void>;
-  deleteBackup: (id: string) => void;
+  restoreBackup: (payload: import("../../lib/cms/db").BackupPayload) => Promise<void>;
+  deleteBackup: (id: string) => Promise<void>;
   toggleSidebar: () => void;
   toggleAdminTheme: () => void;
   setConnected: (v: boolean) => void;
@@ -158,6 +160,9 @@ analytics: {
   bounceRate: 0,
   avgSession: "0:00",
   topPages: [],
+  topBrowsers: [],
+  topReferrers: [],
+  topCities: [],
   visitsByDay: [],
   visitsByCountry: [],
   deviceBreakdown: [],
@@ -450,40 +455,74 @@ analytics: data.analytics,
     set((s) => ({ activity: [{ ...a, id: uid(), createdAt: now() }, ...s.activity].slice(0, 200) }));
     if (isSupabaseConfigured) dbActivity.insert(a).catch(() => undefined);
   },
- createBackup: async (label) => {
-  if (!isSupabaseConfigured) {
-    fail(get, "نسخ احتياطي", new Error("قاعدة البيانات غير مهيأة"));
-    return;
-  }
+  createBackup: async (label) => {
+    if (!isSupabaseConfigured) {
+      fail(get, "نسخ احتياطي", new Error("قاعدة البيانات غير مهيأة"));
+      return;
+    }
 
-  try {
-    const backup = await dbBackup.exportAll(label);
+    try {
+      const backup = await dbBackup.exportAll(label);
 
-    set((s) => ({
-      backups: [
-        {
-          id: backup.id,
-          label,
-          size: backup.size,
-          type: "manual",
-          createdAt: now(),
-          url: backup.url,
-        },
-        ...s.backups,
-      ],
-    }));
+      set((s) => ({
+        backups: [
+          {
+            id: backup.id,
+            label,
+            filename: backup.filename,
+            path: backup.path,
+            size: backup.size,
+            type: "manual",
+            version: backup.version,
+            checksum: backup.checksum,
+            createdAt: now(),
+            url: backup.url,
+          },
+          ...s.backups,
+        ],
+      }));
 
-    get().pushNotification({
-      type: "success",
-      title: "تم إنشاء نسخة احتياطية",
-      message: label,
-    });
+      get().pushNotification({
+        type: "success",
+        title: "تم إنشاء نسخة احتياطية",
+        message: label,
+      });
+    } catch (e) {
+      fail(get, "نسخ احتياطي", e);
+    }
+  },
+  restoreBackup: async (payload) => {
+    if (!isSupabaseConfigured) {
+      fail(get, "استعادة النسخة", new Error("قاعدة البيانات غير مهيأة"));
+      return;
+    }
 
-  } catch (e) {
-    fail(get, "نسخ احتياطي", e);
-  }
-},
-  deleteBackup: (id) => set((s) => ({ backups: s.backups.filter((b) => b.id !== id) })),
+    try {
+      await dbBackup.restoreBackup(payload, { deleteExisting: true });
+      const data = await fetchAll();
+      get().hydrate(data);
+
+      get().pushNotification({
+        type: "success", title: "تمت الاستعادة", message: "تمت إعادة تحميل بيانات CMS من النسخة الاحتياطية.",
+      });
+    } catch (e) {
+      fail(get, "استعادة النسخة", e);
+    }
+  },
+  deleteBackup: async (id) => {
+    if (!isSupabaseConfigured) {
+      fail(get, "حذف النسخة", new Error("قاعدة البيانات غير مهيأة"));
+      return;
+    }
+
+    try {
+      await dbBackup.deleteBackup(id);
+      set((s) => ({ backups: s.backups.filter((b) => b.id !== id) }));
+      get().pushNotification({ type: "success", title: "تم حذف النسخة", message: "تم حذف النسخة بنجاح." });
+    } catch (e) {
+      fail(get, "حذف النسخة", e);
+    }
+  },
   toggleSidebar: () => set((s) => ({ sidebarCollapsed: !s.sidebarCollapsed })),
   toggleAdminTheme: () => set((s) => ({ adminTheme: s.adminTheme === "dark" ? "light" : "dark" })),
   setConnected: (v) => set({ dbStatus: v ? "online" : "offline" }),
