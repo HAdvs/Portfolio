@@ -585,6 +585,11 @@ export const dbBackup = {
     );
 
     // حفظ بيانات النسخة في قاعدة البيانات
+    const {
+  data: { user },
+} = await db().auth.getUser();
+
+console.log("Current user:", user);
     const { data: row, error } = await db()
       .from("backup_files")
       .insert({
