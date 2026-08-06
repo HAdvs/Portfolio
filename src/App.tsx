@@ -1,5 +1,7 @@
 import { AnimatePresence, motion } from "framer-motion";
 import { useEffect, useRef, useState } from "react";
+import { useLocation } from "react-router-dom";
+import { trackPageView } from "./lib/cms/tracker";
 import {
   Background,
   CursorLayer,
@@ -67,6 +69,7 @@ function Site() {
 
   return (
     <>
+      <AnalyticsTracker />
       <Background />
       <CursorLayer />
       <ScrollProgress />

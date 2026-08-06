@@ -3,6 +3,7 @@ import {
   STORAGE_BUCKET,
   BACKUP_BUCKET,
 } from "../supabaseClient";
+import { dbAnalytics } from "./analytics";
 import type {
   ActivityLog, AdminUser, Category, Client, ContentBlock, FaqItem, MediaFile, Message,
   Project, SeoConfig, Service, SiteSettings, Testimonial, UserRole,
@@ -230,6 +231,7 @@ export async function fetchAll() {
     ]);
 
   const fatal = [projects, media, messages, testimonials, services, categories, faq, seo].find((r) => r.error);
+  const analytics = await dbAnalytics.getDashboardStats();
   if (fatal?.error) throw fatal.error;
 
   return {
@@ -255,6 +257,8 @@ export async function fetchAll() {
     type: b.type,
     createdAt: b.created_at,
   })),
+
+  analytics,
 };
 }
 

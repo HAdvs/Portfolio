@@ -57,6 +57,7 @@ export interface AdminStore {
   backups: Backup[];
   blocks: ContentBlock[];
   clients: Client[];
+  analytics: DashboardStats["analytics"];
 
   // local-only UI state
   notifications: Notification[];
@@ -147,7 +148,20 @@ export const useAdminStore = create<AdminStore>()((set, get) => ({
   // ── empty until hydrated from PostgreSQL ──────────────────────────
   projects: [], media: [], messages: [], testimonials: [], services: [],
   categories: [], faq: [], seo: [], settings: null, users: [], activity: [], backups: [],
-  blocks: [], clients: [],
+  blocks: [],
+clients: [],
+
+analytics: {
+  totalVisitors: 0,
+  uniqueVisitors: 0,
+  pageViews: 0,
+  bounceRate: 0,
+  avgSession: "0:00",
+  topPages: [],
+  visitsByDay: [],
+  visitsByCountry: [],
+  deviceBreakdown: [],
+},
 
   notifications: [],
   sidebarCollapsed: false,
@@ -174,8 +188,8 @@ hydrate: (data) =>
 
     blocks: data.blocks ?? [],
     clients: data.clients ?? [],
-    backups: data.backups ?? [],
-
+backups: data.backups ?? [],
+analytics: data.analytics,
     dbStatus: "online",
     lastSync: now(),
   }),
@@ -480,34 +494,19 @@ export const selectDashboardStats = (s: AdminStore): DashboardStats => {
   const projects = s.projects ?? [];
   const messages = s.messages ?? [];
   const media = s.media ?? [];
-  return {
-    totalProjects: projects.length,
-    publishedProjects: projects.filter((p) => p.status === "published").length,
-    totalMessages: messages.length,
-    unreadMessages: messages.filter((m) => m.status === "unread").length,
-    totalMedia: media.length,
-    storageUsed: media.reduce((acc, m) => acc + (m?.size ?? 0), 0),
-    totalServices: (s.services ?? []).length,
-    totalTestimonials: (s.testimonials ?? []).length,
-    recentActivity: (s.activity ?? []).slice(0, 8),
-    analytics: {
-      totalVisitors: 12480, uniqueVisitors: 8930, pageViews: 34250, bounceRate: 38.4, avgSession: "3:24",
-      topPages: [
-        { page: "/", views: 8420 }, { page: "/work", views: 5230 }, { page: "/about", views: 3180 },
-        { page: "/contact", views: 2840 }, { page: "/services", views: 2460 },
-      ],
-      visitsByDay: Array.from({ length: 14 }, (_, i) => ({
-        date: new Date(Date.now() - (13 - i) * 86400000).toLocaleDateString("en-US", { month: "short", day: "numeric" }),
-        visits: 200 + ((i * 137) % 800),
-      })),
-      visitsByCountry: [
-        { country: "السعودية", visits: 6240, flag: "🇸🇦" }, { country: "الإمارات", visits: 2180, flag: "🇦" },
-        { country: "الكويت", visits: 1340, flag: "🇰🇼" }, { country: "مصر", visits: 980, flag: "🇪🇬" },
-        { country: "الأردن", visits: 720, flag: "🇯🇴" },
-      ],
-      deviceBreakdown: [{ device: "Mobile", pct: 58 }, { device: "Desktop", pct: 34 }, { device: "Tablet", pct: 8 }],
-    },
-  };
+ return {
+  totalProjects: projects.length,
+  publishedProjects: projects.filter((p) => p.status === "published").length,
+  totalMessages: messages.length,
+  unreadMessages: messages.filter((m) => m.status === "unread").length,
+  totalMedia: media.length,
+  storageUsed: media.reduce((acc, m) => acc + (m?.size ?? 0), 0),
+  totalServices: (s.services ?? []).length,
+  totalTestimonials: (s.testimonials ?? []).length,
+  recentActivity: (s.activity ?? []).slice(0, 8),
+
+  analytics: s.analytics,
+};
 };
 
 export function useDashboardStats(): DashboardStats {
@@ -517,8 +516,27 @@ export function useDashboardStats(): DashboardStats {
   const services = useAdminStore((s) => s.services);
   const testimonials = useAdminStore((s) => s.testimonials);
   const activity = useAdminStore((s) => s.activity);
+  const analytics = useAdminStore((s) => s.analytics);
+
   return useMemo(
-    () => selectDashboardStats({ projects, messages, media, services, testimonials, activity } as AdminStore),
-    [projects, messages, media, services, testimonials, activity],
+    () =>
+      selectDashboardStats({
+        projects,
+        messages,
+        media,
+        services,
+        testimonials,
+        activity,
+        analytics,
+      } as AdminStore),
+    [
+      projects,
+      messages,
+      media,
+      services,
+      testimonials,
+      activity,
+      analytics,
+    ],
   );
 }
